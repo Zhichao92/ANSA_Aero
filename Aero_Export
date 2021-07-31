@@ -1,0 +1,268 @@
+# PYTHON script
+import os
+import glob
+import tarfile
+import logging
+import collections
+
+from ansa import base, constants
+
+import Excel_Parser as ep
+import aero_constants as ae_const
+import aero_general as ae_gen
+import aero_logging
+
+class ExportWrapper():
+	''' Wrapper needed to define all common variables and methods only once'''
+
+	def __init__(self, excelfname=None, is_save_jt=True, is_export_geom=True,
+			  is_overview_img = True, is_export_front_area=True, is_targz_input=True):
+
+		self.stop_process = False
+		self.file_path = base.DataBaseName()
+		log_file_name = "aero_gui"
+		if len(self.file_path) < 1:
+			self.stop_process = True
+		else:
+			log_file_name = ae_gen.get_ansa_file_name_without_extension(os.path.basename(self.file_path))
+		if excelfname is None:
+			# Called not from the gui, logger not exists!
+			aero_logging.generate_logger(log_file_name)
+		self.log = logging.getLogger()
+
+		if excelfname is None: #called not from the gui: e.g export buttons
+			# using the file found in the script dir
+			self.script_path = os.path.dirname(os.path.realpath(__file__))
+			excelfname = glob.glob(self.script_path+'/*.xlsm')[0].replace('\\', '/')
+			if len(excelfname) < 1:
+				self.stop_process = True
+				self.error("No excel file found in dir: '{}'".format(self.script_path))
+
+		if not self.stop_process:
+			self.log.info("Ansa file path: {}".format(self.file_path))
+			self.current_dir = os.path.dirname(self.file_path)
+			self.aero_group = collections.defaultdict(list)
+			self.unused_parts_in_model = []
+			self.unused_in_model_lock_name = ae_const.UNUSED_LOCK_NAME
+			self.GroupList = ep.excel(excelfname).groups_summary
+			self.img_exclude_list=ae_const.IMG_EXCLUDE_LIST
+			self.floor_level = ae_const.FRONT_AREA_PT10_Z
+			self.unmeshed_parts = []
+
+			# Options to enable/disable features -> useful for development
+			self.is_save_full_view_jt = is_save_jt
+			self.is_del_empty_dir_created_during_exp_jt = False
+			self.is_export_geometry = is_export_geom
+			self.is_generate_overview_imgs = is_overview_img
+			self.is_export_frontal_area = is_export_front_area
+			self.is_targz_input_dir_enabled = is_targz_input
+			self.is_cwd_restore_enabled = True
+		else:
+			self.log.info("Error happened! Ansa file path: '{}' Excel file: '{}'".format(self.file_path, excelfname))
+
+	def create_export_directories(self, exportdir):
+		if len(exportdir) > 0:
+			if exportdir[-1] != "/":
+				exportdir = exportdir+"/"
+			if not os.path.exists(exportdir):
+				self.log.debug("Creating folder: {}".format(exportdir))
+				try:
+					os.makedirs(exportdir)
+				except Exception as e:
+					self.stop_process = True
+					self.log.error("Cannot create folder! Error: {}".format(e))
+		else:
+			self.stop_process = True
+			self.log.error("Cannot create folder! Nothing provided!")
+		return exportdir
+
+	def get_deck_ents(self, ent_type):
+		return base.CollectEntities(self.deck, None, ent_type)
+
+	def load_not_exported_lock_view(self):
+
+		base.LoadStoredLockView(self.not_exported_lock_name)
+
+	def get_unused_parts_in_model(self):
+
+		val_field = ('User/Aero/Aero_Group', 'USE_IN_MODEL')
+		units = base.GetLengthUnits().lower()
+		if units == "millimeter":
+			mult_const = 1e6
+		else:
+			mult_const = 1.0
+
+		for p in self.ent_pshell_list:
+			if self.deck == constants.OPENFOAM:
+				val_field = ('User/Aero/Aero_Group', 'User/Aero/OpenFOAM', 'USE_IN_MODEL', 'Num.Elem')
+			else:
+				val_field = ('User/Aero/Aero_Group', 'USE_IN_MODEL', 'Num.Elem')
+			vals = base.GetEntityCardValues(self.deck, p, val_field)
+			if vals['USE_IN_MODEL'] == "YES":
+				if self.deck == constants.OPENFOAM:
+					self.aero_group[vals['User/Aero/OpenFOAM'], vals['User/Aero/Aero_Group']].append(p)
+				else:
+					self.aero_group[vals['User/Aero/Aero_Group']].append(p)
+			else:
+				self.log.info("Part with unchecked 'USE_IN_MODEL' flag added to unused parts: {}".format(p._name))
+				self.unused_parts_in_model.append(p)
+			if vals['Num.Elem'] < 1:
+				# Currently unmeshed parts stored in unused lock
+				self.log.info("Unmeshed part added to unused parts: {}".format(p._name))
+				self.unmeshed_parts.append(p)
+				self.unused_parts_in_model.append(p)
+			area = base.CalcShellArea(p)
+			if area > mult_const*ae_const.MAXIMUM_SURFACE_AREA:
+				self.log.info("Large face added to unused parts: {} {:.4f} m2".format(p._name, area/mult_const))
+				self.unused_parts_in_model.append(p)
+
+		self.log.info("{} parts won't be used during exports".format(len(self.unused_parts_in_model) ))
+
+
+	def check_not_exported_parts(self):
+
+		#self.log.debug("Parts not exported: {}".format(parts_not_exported))
+		if len(self.parts_not_exported) == 0:
+			self.log.info("All PIDs exported successfully!")
+		else:
+			ae_gen.store_parts_in_lock(self.not_exported_lock_name, self.parts_not_exported )
+			self.log.info('WARNING! {} parts not exported. Please check them in the lock named: {}'.format(
+					len(self.parts_not_exported), self.not_exported_lock_name))
+
+	@ae_gen.aero_timing
+	def save_jt(self):
+		#Using ansa name if possible (compatible with ansa.gz and ansa)
+		#Saved only if the file not exists in the folder
+
+		jt_file_name = ""
+		ansa_file_name = ae_gen.get_ansa_file_name_without_extension(self.file_path)
+		if ansa_file_name == "default":
+			jt_file_name = "preview.jt"
+		else:
+			jt_file_name = "{}.jt".format(ansa_file_name)
+		if os.path.isfile(jt_file_name):
+			self.log.info("JT export: jt file not exported. File already exist: {}".format(jt_file_name))
+		else:
+			self.log.info("JT export: saving as: {}".format(jt_file_name))
+			base.SaveFileAsJT(jt_file_name, 'ALL', 'MILLIMETERS')
+			if self.is_del_empty_dir_created_during_exp_jt:
+				self.delete_empty_folders_made_by_jt_export(self.get_main_model_groups())
+
+	def get_main_model_groups(self):
+
+		group_names=[]
+		group_name = ""
+		#Iterate over all parts
+		for part in self.ent_pshell_list:
+			ent=base.GetEntityPart(part)
+			ent_type=base.GetEntityType(constants.NASTRAN,ent)
+			# Check if it is ansagroup
+			while(ent_type=="ANSAGROUP"):
+				#Loop until the root group found (last ->assumption)
+				group_name=ent._name
+				group=base.GetEntityPart(ent)
+				ent_type=base.GetEntityType(constants.NASTRAN,group)
+				ent=group
+
+			#When saving a file containing /, it works as a path separator (folder name cuts)
+			if len(group_name) > 0:
+				group_name = group_name.split("/")[0]
+				if group_name not in group_names:
+					# Collect all main model groups
+					group_names.append(group_name)
+		return group_names
+
+	def delete_empty_folders_made_by_jt_export(self, group_names):
+
+		self.log.info("JT export: found main groups: {}".format(group_names))
+		file_dir = os.path.dirname(base.DataBaseName())
+		for d in group_names:
+			subdir = file_dir+"/"+d
+			if os.path.isdir(subdir) and len(os.listdir(subdir))==0:
+				# Delete only when it is empty folder
+				self.log.info("JT export: delete empty directory: {}".format(subdir))
+				os.chmod(subdir, 0o777)
+				self.log.debug("Folder rights granted")
+				os.rmdir(subdir)
+				self.log.debug("Folder deleted!")
+
+
+	@ae_gen.aero_timing
+	def save_images_in_diff_views(self, pictures_dir):
+
+		# pictures_dir is absolute path
+		ae_gen.set_current_menu("TOPO")
+		ae_gen.set_view_options(ae_const.GEOM_OVERVIEW_VIEW_BUTTONS)
+
+		ae_gen.show_only_parts(parts_to_hide = self.unused_parts_in_model)
+
+		# hiding not used_in_model parts
+		bottom_view_hidden_parts = []
+		for e in self.ent_pshell_list:
+			fields = ('User/Aero/Aero_Group', 'Name')
+			vals = e.get_entity_values(self.deck, fields)
+			# store parts, which should be hidden later
+			mask_list = [exc_part in vals["Name"] for exc_part in self.img_exclude_list ]
+			if any(mask_list):
+				self.log.info("Store hidden part for bottom view: {}".format(vals['Name']))
+				bottom_view_hidden_parts.append(e)
+
+		for i in range(1,7):
+			if(i == 4):
+				continue
+			base.SetViewAngles(f_key="f{}".format(str(i) ))
+			current_view = ae_const.GEOM_OVERVIEW_VIEWS[str(i)]
+			file_name = os.path.join(pictures_dir, "view_{}.png".format(current_view) )
+			ae_gen.save_snapshot(file_name)
+
+		# only bottom
+		for e in bottom_view_hidden_parts:
+			base.Not(e)
+		# bottom view
+		i = 4
+		base.SetViewAngles(f_key="f{}".format(str(i) ))
+		current_view = ae_const.GEOM_OVERVIEW_VIEWS[str(i)]
+		file_name = os.path.join(pictures_dir, "view_{}.png".format(current_view) )
+		ae_gen.save_snapshot(file_name)
+		ae_gen.set_current_menu("MESH")
+
+	@ae_gen.aero_timing
+	def archive_folder(self, dir_to_compress, output_path):
+
+		if not os.path.isdir(dir_to_compress):
+			self.log.info("Archive not generated: no valid path found! {}".format(dir_to_compress))
+			return
+		#save the file next to the archived folder
+		arch_name = os.path.join(output_path,"geometry.tar.gz")
+		self.log.info("Compressing input directory as {}".format(arch_name))
+
+		#open a tarfile
+		with tarfile.open(arch_name, "w:gz") as f:
+			# empty arcname will skip the folder: input
+			f.add(dir_to_compress, arcname="", recursive=True)
+
+	def flatten_list_recursively(self, data):
+		'''Checksif there is a sublistin data and flatten it to a simple list. Recursive'''
+		list_of_lists=[]
+		list_of_lists.extend(data) # make a copy,not by reference
+		flat_list = []
+		if len(list_of_lists) > 0:
+			while list_of_lists:
+				el = list_of_lists.pop()
+				if type(el)==list:
+					list_of_lists.extend(el)
+				else:
+					flat_list.append(el)
+			flat_list.sort()
+		return flat_list
+
+	def reset_current_dir(self):
+		''' After export ansa workdir changes.
+			os.chdir doesnt work
+			Workaround: saving a dummy file to ansa base folder will change it back
+			After that we need to delete it'''
+		base.Or([])
+		ansa_file_dir = os.path.dirname(self.file_path)
+		base.OutputNastran(filename=ansa_file_dir+"/file_to_delete.nas", mode="visible", format = "short")
+		os.remove(ansa_file_dir+"/file_to_delete.nas")
+		self.log.debug("Ansa working directory reset to {}".format(ansa_file_dir))
