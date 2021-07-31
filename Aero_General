@@ -1,0 +1,177 @@
+from ansa import base, constants, utils
+import time
+import os
+import logging
+import aero_constants as ae_const
+
+log = logging.getLogger()
+
+def aero_timing(method):
+	'''Decorator to measure function runtime'''
+	def elapsed_timed(*args, **kw):
+		log = logging.getLogger()
+		start = time.time()
+		log.info('Starting {func}()'.format(func=method.__name__))
+		result = method(*args, **kw)
+		end = time.time()
+		runtime = end - start
+		log.info('{func}() finished! Runtime: {t:.1f} [sec]\n'.format(func=method.__name__, t=runtime))
+		return result
+	return elapsed_timed
+
+def get_lock_based_on_name(lock_name):
+
+	matched_ents = base.NameToEnts(lock_name, constants.OPENFOAM, constants.ENM_EXACT)
+	if matched_ents is not None:
+		# keep only lock_view types
+		return [ p  for p in matched_ents if base.GetEntityType(constants.OPENFOAM, p) == 'LOCK_VIEW']
+	else:
+		return []
+
+def hide_list_of_locks(list_of_locks=[]):
+
+	if len(list_of_locks) > 0:
+		for lockname in list_of_locks:
+			lock_to_hide = get_lock_based_on_name(lockname)
+			if len(lock_to_hide) > 0:
+				log.info("Hiding {} lock".format([p._name for p in lock_to_hide]))
+				base.Not(lock_to_hide)
+	else:
+		log.info("Hide locks: nothing to hide!")
+
+def show_only_list_of_locks(required_locks = ["WHEEL_FRONT", "WHEEL_REAR"]):
+
+	list_of_locks = []
+	if len(required_locks) < 1:
+		log.error("No lock names provided!")
+		return -1
+
+	# gather all entity with the same name
+	for lock_name in required_locks:
+		lock_ents = get_lock_based_on_name(lock_name)
+		if len(lock_ents) > 0:
+			list_of_locks += get_lock_based_on_name(lock_name)
+
+	if len(list_of_locks) < 1:
+		log.error("No locks found with name: {}".format(required_locks))
+		return -1
+	log.info("Requested locks: {} Found locks: {}".format(required_locks, [p._name for p in list_of_locks]))
+	base.Or(list_of_locks )
+	return 1
+
+def store_parts_in_lock(lock_name, part_list):
+
+	log.info("Creating {} lock for {} parts.".format(lock_name, len(part_list)))
+	base.Or(part_list)
+	base.SetViewAngles(f_key='F10')
+	base.StoreLockView(lock_name, overwrite=True)
+
+def show_only_parts(parts_to_show=[], parts_to_hide = []):
+
+	if len(parts_to_show) > 0:
+		log.info("Show parts: {}".format(len(parts_to_show)))
+		base.Or(parts_to_show)
+	else:
+		log.info("Show all parts")
+		base.All()
+	if len(parts_to_hide) > 0:
+		log.info("Hiding parts: {}".format(len(parts_to_hide)))
+		base.Not(parts_to_hide)
+	base.SetViewAngles(f_key="F10")
+
+def set_view_options(view_options):
+
+	log.info("Setting view buttons settings (bottom right panel)")
+	log.debug("Options: {}".format(view_options))
+	# ViewButtons on the bottom of the ansa window
+	base.SetViewButton(view_options)
+
+def set_entity_visibility_values(values):
+
+	log.info("Setting entity visibility values (F12 DB Browser)")
+	log.debug("Values: {}".format(values))
+	# Entityvisibility in DataBase F12
+	base.SetEntityVisibilityValues(constants.NASTRAN, values )
+
+def set_current_menu(requested_menu):
+
+	requested_menu = requested_menu.upper()
+	if requested_menu not in ae_const.AVAILABLE_MENUS:
+		log.error('''Cannot change to {}!'''.format(requested_menu) +
+			''' Accepted values are {}!'''.format(ae_const.AVAILABLE_MENUS) )
+		return -1
+	current_menu = base.CurrentMenu()
+	if current_menu != requested_menu:
+		log.info("Changing menu from {} to {}!".format(current_menu, requested_menu))
+		base.SetCurrentMenu(requested_menu)
+	return 1
+
+def get_ansa_file_name_without_extension(fname):
+
+	extensions = [".ansa", ".ansa.gz"]
+	ansa_name = [fname[:-len(e)] for e in extensions if fname.endswith(e)]
+	if len(ansa_name) < 1:
+		ansa_name = ["default"]
+	return ansa_name[0]
+
+def clear_sets_and_comments(deck):
+
+	log.info("Delete sets and comments...")
+	#clearing general comment
+	base.SetGeneralComment('')
+	#delete sets
+	sets = base.CollectEntities(deck, None, "SET") # SET is the same for OPENFOAM and NASTRAN
+	base.DeleteEntity(sets)
+
+def delete_HP_attributes():
+	log.info("Delete HP attributes...")
+	required_attributes = base.GetUserDefinedAttributes(deck=constants.OPENFOAM, element_type="SHELL_PROPERTY")
+	if required_attributes !=0:
+		for i in required_attributes:
+			full_ua_name = base.GetEntityCardValues(constants.OPENFOAM, i, ['Full Name'])['Full Name']
+			if 'Aero' not in full_ua_name:
+				log.debug("Userattribute {} deleted".format(i._name))
+				base.DeleteEntity(i, True)
+
+def clean_and_set_user_attributes():
+	"""
+		This function delete unwanted user attribute and create missing user attribute.
+	"""
+
+	shell_user = []
+	shell_user_attri = base.GetUserDefinedAttributes(deck = constants.OPENFOAM, element_type = 'SHELL_PROPERTY')
+	if shell_user_attri != 0:
+		for i in shell_user_attri:
+			if i._name not in ae_const.REQ_ATTRIBUTES:
+				log.debug("Userattribute {} deleted".format(i._name))
+				base.DeleteEntity(i)
+			else:
+				del_accepted_values = base.SetEntityCardValues(deck=constants.OPENFOAM, entity=i, fields={'Accepted Values':''}, debug=constants.REPORT_ALL)
+				shell_user.append(i._name)
+	for j in ae_const.REQ_ATTRIBUTES:
+		if j not in shell_user:
+			if j not in ae_const.PF_PID_ATTRIBUTES:
+				val = {"name":j, "groupname":"Aero"}
+			else:
+				val = {"name":j, "groupname":"Aero/Powerflow/"}
+			attr = base.CreateUserDefinedAttribute(element_type="SHELL_PROPERTY", name = val["name"], group_name = val["groupname"])
+	log.info("Clean and Set Aero attributes done.\n")
+
+def save_snapshot(fname):
+
+	#fname is absolute path
+	rval = utils.SnapShot(fname, "PNG", red = 255, blue = 255, green = 255, text_axes=True, auto_text_color=True)
+
+	if(rval == 0):
+		log.info("Snapshot saved to: {}".format(fname))
+	else:
+		log.info("Snapshot failed (doesn't work in nogui mode): {}".format(fname))
+
+def helper_print_category_types_in_deck(deck, category, strfilter):
+	''' Unused function, only for debug!!!'''
+	types = base.TypesInCategory(deck, category)
+	print([t for t in types if strfilter.lower() in t.lower()])
+
+#helper_print_category_types_in_deck(constants.NASTRAN, "__ALL_ENTITIES__", "shell")
+#helper_print_category_types_in_deck(constants.OPENFOAM, "__ALL_ENTITIES__", "shell")
+#show_only_list_of_locks()
