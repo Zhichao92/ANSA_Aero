@@ -1,0 +1,158 @@
+import os
+from ansa import base, constants, utils
+
+import logging
+import aero_constants as ae_const
+import aero_general as ae_gen
+
+log = logging.getLogger()
+
+@ae_gen.aero_timing
+def calculate_frontal_area(output_directory="", unused_in_model_lock_name=None,
+						    not_exported_lock_name=None, PT10_Z = 0.0, output_format="TEXT"):
+
+	# script used: eval_area_front.py
+	ret = ae_gen.show_only_list_of_locks(required_locks = ae_const.FRONT_AREA_REQUIRED_LOCKS)
+	if ret:
+		move_below_ground_nodes_to_ground(PT10_Z)
+		#base.All() # uncomment in case of hide nodes below ground
+		# hide_nodes_below_ground(PT10_Z)
+		set_view_front_area(locks_to_hide = [unused_in_model_lock_name, not_exported_lock_name])
+
+		file_name = output_directory + ae_const.FRONT_AREA_PNG_FILE_NAME
+		ae_gen.save_snapshot(file_name)
+
+		unit = base.GetLengthUnits()
+
+		if output_format=="TEXT":
+			ofilename = output_directory + ae_const.FRONT_AREA_TXT_FILE_NAME
+			log.info("Saving frontal area as: {}".format(ofilename)) # deckinfo automatically prints out the filepath
+			utils.DeckInfo(ofilename, mode ="visible", text_format ="TEXT",
+				  active_options = ae_const.FRONT_AREA_INFO_OPTIONS_TXT,
+				  parameter_values=ae_const.FRONT_AREA_INFO_PARAM  )
+			log.info("Report saved")
+			get_projected_area_from_txt_file(ofilename, unit)
+		elif output_format=="HTML":
+
+			# Couldnt find the options for white background and black text color
+			ofilename = output_directory + ae_const.FRONT_AREA_HTML_FILE_NAME
+			log.info("Saving frontal area as: {}".format(ofilename)) # deckinfo automatically prints out the filepath
+			utils.DeckInfo(ofilename, mode ="visible", text_format ="HTML",
+				  active_options = ae_const.FRONT_AREA_INFO_OPTIONS_HTML,
+				  parameter_values=ae_const.FRONT_AREA_INFO_PARAM  )
+			log.info("Report saved")
+			get_projected_area_from_html_file(ofilename, unit)
+		else:
+			log.warning("Frontal area calculation failed! Only TEXT and HTML format implemented!")
+	else:
+		log.warning("Frontal area calculation failed! Locks not found: {}".format(ae_const.FRONT_AREA_REQUIRED_LOCKS))
+
+def set_view_front_area(locks_to_hide = []):
+
+	base.All()
+	if len(locks_to_hide) > 0:
+		ae_gen.hide_list_of_locks(locks_to_hide)
+
+	base.SetViewAngles(f_key="F2")
+	ae_gen.set_current_menu("MESH")
+	ae_gen.set_view_options(ae_const.FRONT_AREA_VIEW_BUTTONS)
+
+
+@ae_gen.aero_timing
+def move_below_ground_nodes_to_ground(PT10_Z):
+
+	# Search nodes for Z < PT10_Z  and move to Z = PT10_Z
+	# NODE/GRID
+	nodes=base.NodesOfVisibleElements()
+	nm_counter=0
+	for node in nodes:
+		val_field = ('Z',)
+		res = base.GetEntityCardValues(constants.OPENFOAM, node, val_field)
+		if float(res['Z']) < PT10_Z:
+			nm_counter+=1
+			vals = {'Z': PT10_Z}
+			base.SetEntityCardValues(constants.OPENFOAM,  node,vals)
+	log.info(" {} nodes moved to z: {} position".format(nm_counter, PT10_Z))
+
+@ae_gen.aero_timing
+def hide_nodes_below_ground(PT10_Z):
+
+	# Search nodes for Z < PT10_Z  and move to Z = PT10_Z
+	# NODE/GRID
+
+	nodes=base.NodesOfVisibleElements()
+	nm_counter=0
+	nodes_to_hide = []
+	for node in nodes:
+		val_field = ('Z',)
+		res = base.GetEntityCardValues(constants.OPENFOAM, node, val_field)
+		if float(res['Z']) < PT10_Z:
+			nm_counter+=1
+			nodes_to_hide.append(node)
+	log.debug(" {} nodes will be hidden for front area view: {}".format(nm_counter, PT10_Z))
+	if len(nodes_to_hide) > 0:
+		log.info("Hiding {} nodes".format(len(nodes_to_hide)))
+		# Issue: hiding nodes will hide the entity as well
+		base.Not(nodes_to_hide)
+
+def get_projected_area_from_html_file(fname, unit):
+
+	log.info("Reading projected area from file: {} Units: {}".format(fname, unit))
+
+	if os.path.isfile(fname):
+		with open(fname, "r") as f:
+			data = [line.strip() for line in f.readlines() if line.strip()]
+
+		if len(data) > 0:
+			scale = 1.0
+			for i, line in enumerate(data):
+				if "<b> Projected Frontal area</b>" in line:
+					try:
+						proj_area = data[i+1].split()[-1].split("<")[0]
+					except Exception as e:
+						log.error(e)
+						return
+					break
+			if unit.lower() == "millimeter":
+				log.info("Area will be scaled from mm2 to m2")
+				scale = 0.001*0.001 # to scale it to m2
+			proj_area = float(proj_area) * scale
+
+			outfname = os.path.dirname(fname) + "/" + ae_const.FRONT_AREA_DAT_FILE_NAME
+			with open(outfname, "w") as fo:
+				fo.write("{:.4f}".format(proj_area))
+			log.info("Scaled area: {:.4f}m2 Saved as: {}".format(proj_area, outfname))
+		else:
+			log.error("Failed to read Projected area from file: {}".format(fname))
+	else:
+		log.error("File not found: {}".format(fname))
+
+def get_projected_area_from_txt_file(fname, unit):
+	''' fname is full path to "front_area.txt", unit is a string like meter/millimeter '''
+	log.info("Reading projected area from file: {} Units: {}".format(fname, unit))
+
+	if os.path.isfile(fname):
+		with open(fname, "r") as f:
+			data = [line.strip() for line in f.readlines() if line.strip()]
+
+		if len(data) > 0:
+			scale = 1.0
+			for line in reversed(data):
+				if "projected frontal area" in line.lower() and "gaps and holes filled" not in line.lower():
+					proj_area = line.split(",")
+					break
+			if unit.lower() == "millimeter":
+				log.info("Area will be scaled from mm2 to m2")
+				scale = 0.001*0.001 # to scale it to m2
+			proj_area[1] = float(proj_area[1] ) * scale
+
+			outfname = os.path.dirname(fname) + "/" + ae_const.FRONT_AREA_DAT_FILE_NAME
+			with open(outfname, "w") as fo:
+				fo.write("{:.4f}".format(proj_area[1]))
+			log.info("Scaled area: {:.4f}m2 Saved as: {}".format(proj_area[1], outfname))
+		else:
+			log.error("Failed to read Projected area from file: {}".format(fname))
+	else:
+		log.error("File not found: {}".format(fname))
+
+#calculate_frontal_area(None)
