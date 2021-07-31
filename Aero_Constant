@@ -1,0 +1,52 @@
+# PYTHON script
+
+''' All constant used for aero gui should be here'''
+########################################################################################################
+#Aero_pid.py
+COL_HEADERS = ('PID Name', 'Aero_Group', 'OpenFOAM', 'Lock_Views', 'Mesh',
+			   'Offset_Resolution', 'Boundary_Condition', 'Render', 'CCM+')
+COL_NUMS = len(COL_HEADERS)
+EXCEL_BCLABEL = 0
+########################################################################################################
+#Aero_GUI.py
+LOG_DECORATION = 50*'='
+REQ_ATTRIBUTES = ('Aero_Group', 'OpenFOAM', 'Lock_Views', 'Mesh',
+				  'Offset_Resolution', 'Boundary_Condition', 'Render', 'CCM+')
+AVAILABLE_MENUS = ('TOPO', 'MESH', 'VOLUME MESH', 'MORPH', 'HEXA BLOCK', 'CROSS', 'KINETICS')
+PF_PID_ATTRIBUTES = ( 'Offset_Resolution', 'Boundary_Condition', 'Render')
+########################################################################################################
+#Aero_Export
+INIT_VIEW_BUTTONS = {"SHADOW":"on", "VIEWMODE":"PID", "WIRE":"off", "GRIDs":"off",
+						  "PERIMS":"off", 'FE-Mode':'on', 'Geometry':'on', 'Bounds':'off'}
+
+INIT_ENT_VIS_VALUES = {"MEASUREMENT": "off", "CBAR" : "off", "CURVE": "off", "POINT":"off"}
+
+IMG_EXCLUDE_LIST=("BBWAL0840_floorTurnTable","BBWAL0950_splitterArea")
+UNUSED_LOCK_NAME = "NOT_USE_IN_MODEL"
+MAXIMUM_SURFACE_AREA = 10 # m2
+
+GEOM_OVERVIEW_VIEW_BUTTONS = {"SHADOW":"on", "VIEWMODE":"PID", "WIRE":"off", "GRIDs":"off",
+							  "PERIMS":"off", 'FE-Mode':'on', 'Geometry':'on', 'Bounds':'off'}
+
+GEOM_OVERVIEW_VIEWS = {"1": "top",	"2": "front",	"3": "side_1",
+						   "4": "bottom", 	"5": "back",	"6": "side_2"}
+########################################################################################################
+#aero_frontal_area
+FRONT_AREA_PT10_Z = 0.0 # floor level
+FRONT_AREA_HTML_FILE_NAME = "front_area.html"
+FRONT_AREA_TXT_FILE_NAME = "front_area.txt"
+FRONT_AREA_PNG_FILE_NAME = "front_area.png"
+FRONT_AREA_DAT_FILE_NAME = "area.dat"
+FRONT_AREA_INFO_OPTIONS_TXT =  ['header_footer', 'Area_info']
+FRONT_AREA_INFO_OPTIONS_HTML =  ['header_footer', 'Area_info', 'Image']
+
+# the dictionary key is a string equal to a gui label and the
+# dictionary value is a csv string
+FRONT_AREA_INFO_PARAM = {'Number Precision':'5', 'Number format':'Exponent',
+						 'Text delimiter':',', 'Properties': 'No. , Total, PID'}
+
+FRONT_AREA_REQUIRED_LOCKS=["WHEEL_FRONT", "WHEEL_REAR"]
+
+FRONT_AREA_VIEW_BUTTONS = {"SHADOW" : "on", "VIEWMODE" : "ENT", "WIRE" : "off", "GRIDs" : "off",
+						  "PERIMS" : "off", 'FE-Mode' : 'on', 'Geometry' : 'on', 'Bounds' : 'off'}
+########################################################################################################
