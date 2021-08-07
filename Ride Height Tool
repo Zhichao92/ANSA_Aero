@@ -1,0 +1,1779 @@
+
+
+
+# ------------------------------------------------------------------------------------------------------------------   
+# Main Program Start
+# ------------------------------------------------------------------------------------------------------------------   
+#
+from ansa import *
+import os
+import time
+
+# ------------------------------------------------------------------------------------------------------------------  
+# Global Variables
+# ------------------------------------------------------------------------------------------------------------------  
+#
+# Version
+py_vers="7.0"
+
+# debug = 0 default
+# debug > 0 more comprehensive logging
+# debug > 1 more time logging
+debug=1
+
+# help picture. t.b. improves in the future
+help_img = os.path.dirname(os.path.realpath(__file__))+'/P1.png'
+ 
+# protect ANSA File Path
+FileLoc=base.GetAnsaModelSourceFileNames(base.GetCurrentAnsaModel())[0]
+if FileLoc:Ansa_path=Ansa_path,Ansa_file=os.path.split(FileLoc)
+else:Ansa_path,Ansa_file='',''
+
+#initialize variables
+Glob={};LE={};PB={};Lock_view={};log=[];attitude_data={};GUIvalue={};value_0={};value_1={};Points3D={};Error=[];temp=[];entities={}
+
+# NAMED points lists for PRE-defined names for DIRECT TRANSFORMATIOn
+#WCFlist = ['WHEEL_CENTER_FRONT_LHS','WheelCenter_FRONT_LHS','center_FL','WC_FRONT_LHS','WC_FL', 'center_FR']
+#WCRlist = ['WHEEL_CENTER_REAR_LHS', 'WheelCenter_REAR_LHS', 'center_RL','WC_REAR_LHS', 'WC_RL', 'center_RR']
+#
+WCFlist = ['WHEEL_CENTER_FRONT_LHS','WheelCenter_FRONT_LHS','center_FL','WC_FRONT_LHS','WC_FL']
+WCRlist = ['WHEEL_CENTER_REAR_LHS', 'WheelCenter_REAR_LHS', 'center_RL','WC_REAR_LHS', 'WC_RL']
+EBFlist = ['EYEBROW_DESIGN_FRONT_LHS', 'EYEBROW_FRONT_DESIGN_RHS', 'EyeBrow_FRONT_DESIGN', 'EB_FRONT_DESIGN', 'EB_Front_Design', 'EB_F_DES', 'EB_F_D', 'EB_FD', 'EBF']
+EBRlist = ['EYEBROW_DESIGN_REAR_LHS', 'EYEBROW_REAR_DESIGN_RHS', 'EyeBrow_REAR_DESIGN', 'EB_REAR_DESIGN', 'EB_Rear_Design', 'EB_R_DES', 'EB_R_D', 'EB_RD', 'EBR']
+
+# Input options (GUI and nogui)
+positioning_options=["AERO","TEST","DIRECT"]
+Target_origin_options=[ 'EU=WCF (Wheel_Center_Front)', 'US=TTC (Turn_Table-Center)']
+
+
+################################################################################################
+## old preset
+#
+##body=[];wheels=[];neutral=[]
+##LV=base.CollectEntities(constants.NASTRAN,None, "LOCK_VIEW")
+##for lv in LV:
+##    if lv._name in ['WHEEL_FRONT','WHEEL_REAR']:LV_wheels.append(lv)
+##    elif lv._name in ['BODY','SUSPENSION_FRONT','SUSPENSION_REAR']:LV_body.append(lv)
+##    elif lv._name in ['Neutral_Wheel']:LV_wheel_neutral_0.append(lv)
+##	
+################################################################################################
+
+##
+## L.V.ONLY USE PRE-DEFINED L.V. not all
+## ok ? if more LV exist that the approved ones
+for lv in base.CollectEntities(constants.NASTRAN,None, "LOCK_VIEW"):Lock_view[lv._name]=lv
+#BODY,WHEEL_FRONT,WHEEL_REAR,SUSPENSION_FRONT,SUSPENSION_REAR
+
+
+
+##
+## future : replace with list entries names / e.g. WCFlist 
+##
+# matching Attitude name list
+Attitude_fields={
+'Positioning_option'                    :'Target_position',
+'Target_origin'                         :'Target_coordinate_origin',
+
+'WHEEL_CENTER_X_DESIGN_FRONT_LHS'       :'Wheel_Center_9_front_X_DESIGN',
+'WHEEL_CENTER_Y_DESIGN_FRONT_LHS'       :'Wheel_Center_9_front_Y_DESIGN',
+'WHEEL_CENTER_Z_DESIGN_FRONT_LHS'       :'Wheel_Center_9_front_Z_DESIGN',
+'WHEEL_CENTER_Z_VDA_FRONT_LHS'          :'Wheel_Center_9_front_Z_VDA',
+'TIRE_MINIMUM_SLR_DESIGN_FRONT_LHS'     :'Tire_minimum_SLR_front_DESIGN',
+'TIRE_MINIMUM_SLR_VDA_FRONT_LHS'        :'Tire_minimum_SLR_front_VDA',
+
+'WHEEL_LIP_TO_GROUND_DESIGN_FRONT_LHS'  :'Wheel_Lip_to_Ground_front_DESIGN',
+'WHEEL_LIP_TO_GROUND_VDA_FRONT_LHS'     :'Wheel_Lip_to_Ground_front_VDA',
+'WHEEL_LIP_TO_GROUND_TEST_FRONT_LHS'    :'Eyebrow_TEST_front_Z',
+
+'PT10_DESIGN_X_FRONT_LHS'               :'PT10_front_X_DESIGN', 
+
+'WHEEL_CENTER_X_DESIGN_REAR_LHS'        :'Wheel_Center_9_rear_X_DESIGN', 
+'WHEEL_CENTER_Y_DESIGN_REAR_LHS'        :'Wheel_Center_9_rear_Y_DESIGN', 
+'WHEEL_CENTER_Z_DESIGN_REAR_LHS'        :'Wheel_Center_9_rear_Z_DESIGN',
+'WHEEL_CENTER_Z_VDA_REAR_LHS'           :'Wheel_Center_9_rear_Z_VDA',
+
+'TIRE_MINIMUM_SLR_DESIGN_REAR_LHS'      :'Tire_minimum_SLR_rear_DESIGN',  
+'TIRE_MINIMUM_SLR_VDA_REAR_LHS'         :'Tire_minimum_SLR_rear_VDA',
+
+'WHEEL_LIP_TO_GROUND_DESIGN_REAR_LHS'   :'Wheel_Lip_to_Ground_rear_DESIGN', 
+'WHEEL_LIP_TO_GROUND_VDA_REAR_LHS'      :'Wheel_Lip_to_Ground_rear_VDA',
+'WHEEL_LIP_TO_GROUND_TEST_REAR_LHS'     :'Eyebrow_TEST_rear_Z',
+
+'PT10_DESIGN_X_REAR_LHS'                :'PT10_rear_X_DESIGN',
+
+'CAMBER_DESIGN_FRONT'                   :'Camber_DESIGN_front',
+'CAMBER_DESIGN_REAR'                    :'Camber_DESIGN_rear',
+
+'ROLL_ANGLE'                            :'roll',
+'PITCH_ANGLE'                           :'pitch',
+'YAW_ANGLE'                             :'yaw'
+}
+
+
+###############################################################################################
+#  SUB-Routines, Functions
+###############################################################################################
+
+# ----------------------------------------------------------------------------
+#  function    : unfreezeFEshells()
+#  purpose     : unfreeze FE elements
+#  called from : vehicle_positioning_tool()
+#  arguments   :
+#              : needed, since ANSA up 19.1.6 does not provide functionality
+#              :
+# ----------------------------------------------------------------------------
+def unfreezeFEshells():
+    faces = base.CollectEntities(constants.NASTRAN, None, "FACE")
+    face_shells = base.CollectEntities(constants.NASTRAN,faces,"__ELEMENTS__")
+    shells = base.CollectEntities(constants.NASTRAN, None,"__ELEMENTS__")
+    feshells=list(set(shells)-set(face_shells))
+    for shell in feshells:
+       base.SetEntityCardValues(constants.NASTRAN, shell, {'FROZEN':'NO'})
+
+# ----------------------------------------------------------------------------
+#  function    : distance
+#  purpose     : calculate distance betewwn to coordinates
+#  called from : vehicle_positioning_tool()
+#  arguments   : list= [(x1,y1,z1),(x2,y2,z2)]
+#       list1  : point1 coordinates;
+#       list2  : point2 coordinates
+# ----------------------------------------------------------------------------
+def distance(list1,list2):
+    (x1,y1,z1)=list1
+    (x2,y2,z2)=list2
+    p1=base.Newpoint(x1,y1,z1)
+    p2=base.Newpoint(x2,y2,z2)
+    mes=base.CreateMeasurement([p1,p2], "DISTANCE")
+    result=mes.get_entity_values(constants.NASTRAN, ['RESULT'])['RESULT']
+    base.DeleteEntity([p1,p2,mes], True)
+    return result
+
+# ----------------------------------------------------------------------------
+#  function    : pickpoint
+#  purpose     : select point and set point id in GUI
+#  called from : GUI
+#  arguments   : 
+#        button: pressed button for this function
+#          data: data passed from GUI 
+# ----------------------------------------------------------------------------
+def pickpoint(button,data):
+    point = base.PickEntities(constants.NASTRAN,'POINT')
+    if point==None:return
+    guitk.BCButtonSetText(button,data+str(point[0]._id))
+    return
+
+# ----------------------------------------------------------------------------
+#  function    : PFW
+#  purpose     : print function to output LOG to ANSA, to DOS window and to log file
+#  called from : vehicle_positioning_tool() and sub routines
+#  arguments   : 
+#         text : text to be print in log/console
+# ----------------------------------------------------------------------------
+def PFW(text):
+    print(text)
+    log.append(text)
+
+# ----------------------------------------------------------------------------
+#  function    : save_log
+#  purpose     : to save log file in ansa file location
+#  called from : vehicle_positioning_tool()
+# ----------------------------------------------------------------------------
+def save_log():
+    PFW('')
+    PFW('Date:'+time.strftime("%Y %m %d"))
+    PFW('Time: '+time.strftime("%H %M %S"))
+
+    try:
+        logfile=open(Ansa_path+'/'+time.strftime("%Y%m%d_%H%M%S")+'_'+py_vers+'_RH_trans_log.txt','w')
+        logfile.write('\n'.join(log))
+        logfile.close()
+    except:print('log file creation failed')
+
+# ----------------------------------------------------------------------------
+#  function    : help_func
+#  purpose     : display a help a) picture b) text
+#  called from : GUI
+#  arguments   : None a,b are GUI arguments; not required to pass any data
+# ----------------------------------------------------------------------------
+def help_func(a=None,b=None): 
+    help_window = guitk.BCMessageWindowCreate(guitk.constants.BCMessageBoxInformation, 'TYPE HELP1-TEXT HERE', True)
+    guitk.BCLabelCreate(help_window, 'TYPE HELP2-TEXT HERE')
+    guitk.BCLabelSetIconFileName(guitk.BCLabelCreate(help_window, '') , help_img)
+    guitk.BCLabelCreate(help_window, 'TYPE HELP3-TEXT HERE')
+    guitk.BCMessageWindowSetAcceptButtonVisible(help_window, False)
+    guitk.BCMessageWindowSetRejectButtonVisible(help_window, False)
+    guitk.BCShow(help_window)
+
+# ----------------------------------------------------------------------------
+#  function    : checkForAttitudeFile
+#  purpose     : check the attitude file availability
+#  called from : Set_GUI_values_from_DB
+#  arguments   :
+# ----------------------------------------------------------------------------
+def checkForAttitudeFile():
+    if Ansa_path==None or Ansa_path=='': return ''
+    AttFiles=[Ansa_path+'/'+ file for file in os.listdir(Ansa_path) if file.endswith(".txt") and file.startswith("ATTITUDE")]
+    if AttFiles==[]:Error.append('Attitude file not found');return ''
+    elif len(AttFiles)>1:Error.append('Multiple attitude files found');return ''
+    elif len(AttFiles)==1:print('Attitude file found');return AttFiles[0]
+
+# ----------------------------------------------------------------------------
+#  function    : Set_GUI_values_from_DB
+#  purpose     : collect database value and set in GUI
+#  called from : main
+# ---------------------------------------------------------------------------- 
+def Set_GUI_values_from_DB():
+    AttFile=checkForAttitudeFile()
+    print(AttFile)
+    guitk.BCLineEditPathSetLineEditText(Glob['attitude'],AttFile)
+##
+## future : replace with list entries names / e.g. WCFlis
+##
+    actual_points=base.CollectEntities(constants.NASTRAN,None, "POINT")
+    for point in actual_points:
+        if point._name in WCFlist:
+            guitk.BCButtonSetText(PB['WHEEL_CENTER_POINT_DIRECT_FRONT_LHS'], 'found WC_front= '+str(point._id))
+            base.SetEntityCardValues(constants.NASTRAN,point,{'Name': 'WHEEL_CENTER_FRONT_LHS_0'})
+        elif point._name in WCRlist:
+            guitk.BCButtonSetText(PB['WHEEL_CENTER_POINT_DIRECT_REAR_LHS'], 'found WC_rear= '+str(point._id))
+            base.SetEntityCardValues(constants.NASTRAN,point,{'Name': 'WHEEL_CENTER_REAR_LHS_0'})
+        elif point._name in EBFlist:
+            guitk.BCButtonSetText(PB['WHEEL_LIP_POINT_DIRECT_FRONT_LHS'], 'found EB_front= '+str(point._id))
+            base.SetEntityCardValues(constants.NASTRAN,point,{'Name': 'WHEEL_LIP_FRONT_LHS_0'})
+        elif point._name in EBRlist:
+            guitk.BCButtonSetText(PB['WHEEL_LIP_POINT_DIRECT_REAR_LHS'], 'found EB_rear= '+str(point._id))
+            base.SetEntityCardValues(constants.NASTRAN,point,{'Name': 'WHEEL_LIP_REAR_LHS_0'})   
+
+    if 'Neutral_Wheel' in Lock_view:guitk.BCLineEditSetText(LE['NEUTRAL_WHEEL_ID'] ,str(Lock_view['Neutral_Wheel']._id)) 
+
+# ----------------------------------------------------------------------------
+#  function    : Set_GUI_values_from_Attitude
+#  purpose     : collect Attitude file values and set in GUI
+#  called from : GUI
+#  arguments   : default GUI argument None assigned
+# ---------------------------------------------------------------------------- 
+def Set_GUI_values_from_Attitude(a=None,b=None,c=None):
+    Error.clear();attitude_data.clear()
+  
+    file=guitk.BCLineEditPathLineEditText(Glob['attitude'])
+    if not os.path.isfile(file) :
+        for key in LE:
+            if key in ['NEUTRAL_WHEEL_ID']:continue
+            guitk.BCLineEditSetText(LE[key], "")
+        return
+
+    getattitude_values(file)
+
+    guitk.BCComboBoxSetCurrentItem(Glob['Positioning_option'],positioning_options.index(attitude_data[Attitude_fields['Positioning_option']]))
+    guitk.BCComboBoxSetCurrentItem(Glob['Target_origin'],["EU", "US"].index(attitude_data[Attitude_fields['Target_origin' ]]))
+
+    for key in Attitude_fields:
+        if key in ['Positioning_option','Target_origin']:continue
+        try:guitk.BCLineEditSetText(LE[key], attitude_data[Attitude_fields[key]])
+        except:Error.append('missing: '+key)
+
+    if Error!=[]:guitk.UserWarning('Value Error:\n'+'\n'.join(Error));return
+    return
+
+# ----------------------------------------------------------------------------
+#  function    : Grayout
+#  purpose     : enable/disable fields based on position option change
+#  called from : GUI
+#  arguments   : default GUI argument - None assigned
+# ---------------------------------------------------------------------------- 
+def Grayout(a=None,b=None,c=None):
+##
+## future : replace with list entries names / e.g. WCFlis
+##
+    if guitk.BCComboBoxCurrentText(Glob['Positioning_option'])=='AERO':
+        for i in PB.values():guitk.BCSetEnabled(i, False)
+        for i in LE.values():guitk.BCSetEnabled(i, True)
+ 
+        guitk.BCSetEnabled(LE['WHEEL_LIP_DIRECT_FRONT_LHS'],False)
+        guitk.BCSetEnabled(LE['WHEEL_LIP_DIRECT_REAR_LHS'],False)
+ 
+
+    if guitk.BCComboBoxCurrentText(Glob['Positioning_option'])=='TEST':
+        for i in PB.values():guitk.BCSetEnabled(i, False)
+        for i in LE.values():guitk.BCSetEnabled(i, True)
+     
+        guitk.BCSetEnabled(LE['WHEEL_LIP_TO_GROUND_VDA_FRONT_LHS'],False)
+        guitk.BCSetEnabled(LE['WHEEL_LIP_TO_GROUND_VDA_REAR_LHS'],False)
+        guitk.BCSetEnabled(LE['WHEEL_LIP_TO_GROUND_DESIGN_FRONT_LHS'],False)
+        guitk.BCSetEnabled(LE['WHEEL_LIP_TO_GROUND_DESIGN_REAR_LHS'],False)
+        guitk.BCSetEnabled(LE['WHEEL_CENTER_Z_VDA_FRONT_LHS'],False)
+        guitk.BCSetEnabled(LE['WHEEL_CENTER_Z_VDA_REAR_LHS'],False)
+        guitk.BCSetEnabled(LE['PT10_DESIGN_X_FRONT_LHS'],False)
+        guitk.BCSetEnabled(LE['PT10_DESIGN_X_REAR_LHS'],False)
+   
+        guitk.BCSetEnabled(LE['WHEEL_LIP_DIRECT_FRONT_LHS'],False)
+        guitk.BCSetEnabled(LE['WHEEL_LIP_DIRECT_REAR_LHS'],False)
+
+
+    if guitk.BCComboBoxCurrentText(Glob['Positioning_option'])=='DIRECT':
+        for i in PB.values():guitk.BCSetEnabled(i, True)
+        for i in LE.values():guitk.BCSetEnabled(i, False)
+     
+        guitk.BCSetEnabled(LE['WHEEL_LIP_DIRECT_FRONT_LHS'],True)
+        guitk.BCSetEnabled(LE['WHEEL_LIP_DIRECT_REAR_LHS'],True)
+        guitk.BCSetEnabled(LE['TIRE_MINIMUM_SLR_VDA_FRONT_LHS'],True)
+        guitk.BCSetEnabled(LE['TIRE_MINIMUM_SLR_VDA_REAR_LHS'],True)
+        guitk.BCSetEnabled(LE['TIRE_MINIMUM_SLR_VDA_REAR_LHS'],True)
+        guitk.BCSetEnabled(LE['ROLL_ANGLE'],True)
+        guitk.BCSetEnabled(LE['PITCH_ANGLE'],True)
+        guitk.BCSetEnabled(LE['YAW_ANGLE'],True)
+        guitk.BCSetEnabled(LE['CAMBER_DESIGN_FRONT'],True)
+        guitk.BCSetEnabled(LE['CAMBER_DESIGN_REAR'],True)
+        guitk.BCSetEnabled(LE['NEUTRAL_WHEEL_ID'],True)
+
+# ----------------------------------------------------------------------------
+#  function    : filter_number
+#  purpose     : filter only number from alphanumeric string
+#  called from : get_gui_values()
+#  arguments   : any text
+#  Return      : return only numbers
+# ----------------------------------------------------------------------------
+def filter_number(text):
+    num=''.join([i for i in text if i.isnumeric()])  
+    if num=='':return ''
+    return int(num)
+
+# ----------------------------------------------------------------------------
+#  function    : check_WPOS_values_difference()
+#  purpose     : check whether given input relative or not
+#  called from : vehicle_positioning_tool()
+#  arguments   : 
+# ---------------------------------------------------------------------------- 
+def check_WPOS_values_difference():
+##
+## future : use global list
+## add more values to check
+##
+    if value_0['WHEEL_CENTER_X_DESIGN_REAR_LHS'] -value_0['WHEEL_CENTER_X_DESIGN_FRONT_LHS'] >8000 :Error.append('**WARNING** wheel center X values not realistic')
+    if value_0['WHEEL_LIP_Z_FRONT_LHS']          -value_0['WHEEL_CENTER_Z_DESIGN_FRONT_LHS'] >1000 :Error.append('**WARNING** Distance EB to WC FRONT not realistic')
+    if value_0['WHEEL_LIP_Z_REAR_LHS']           -value_0['WHEEL_CENTER_Z_DESIGN_REAR_LHS']  >1000 :Error.append('**WARNING** Distance EB to WC REAR not realistic') 
+    return
+
+# ----------------------------------------------------------------------------
+#  function    : getattitude_values(attfile)
+#  purpose     : read given attitude file values and assign in to global variable
+#  called from : vehicle_positioning_tool()
+#  arguments   : attfile= string of full attitude file path
+# ----------------------------------------------------------------------------  
+def getattitude_values(attfile):
+    for line in open(attfile, "r"):
+        if line.startswith('#') and line=='\n':continue
+        line=line.replace('\n','').replace(' ','')
+        if not '=' in line: continue
+        [k,v]=line.split('=')
+        if k in attitude_data and not k.startswith('#'):attitude_data[k]='';Error.append('duplicate:'+k)
+        else:attitude_data[k]=v  
+    
+# ----------------------------------------------------------------------------
+#  function    : get_gui_values
+#  purpose     : collect GUI values into variable
+#  called from : vehicle_positioning_tool()
+#  arguments   : 
+# ---------------------------------------------------------------------------- 
+def get_gui_values(): 
+##
+## future : use global list
+##
+    GUIvalue['attitude']=guitk.BCLineEditPathLineEditText(Glob['attitude'])
+
+    GUIvalue['Positioning_option']                    = guitk.BCComboBoxCurrentText(Glob['Positioning_option'])
+    GUIvalue['Target_origin']                         = guitk.BCComboBoxCurrentText(Glob['Target_origin'])
+
+    GUIvalue['WHEEL_CENTER_X_DESIGN_FRONT_LHS']       = guitk.BCLineEditGetText(LE['WHEEL_CENTER_X_DESIGN_FRONT_LHS'])
+    GUIvalue['WHEEL_CENTER_Y_DESIGN_FRONT_LHS']       = guitk.BCLineEditGetText(LE['WHEEL_CENTER_Y_DESIGN_FRONT_LHS'])
+    GUIvalue['WHEEL_CENTER_Z_DESIGN_FRONT_LHS']       = guitk.BCLineEditGetText(LE['WHEEL_CENTER_Z_DESIGN_FRONT_LHS'])
+    GUIvalue['TIRE_MINIMUM_SLR_VDA_FRONT_LHS']        = guitk.BCLineEditGetText(LE['TIRE_MINIMUM_SLR_VDA_FRONT_LHS'])
+
+    GUIvalue['WHEEL_LIP_TO_GROUND_DESIGN_FRONT_LHS']  = guitk.BCLineEditGetText(LE['WHEEL_LIP_TO_GROUND_DESIGN_FRONT_LHS'])
+    GUIvalue['WHEEL_LIP_TO_GROUND_VDA_FRONT_LHS']     = guitk.BCLineEditGetText(LE['WHEEL_LIP_TO_GROUND_VDA_FRONT_LHS']) 
+    GUIvalue['WHEEL_LIP_TO_GROUND_TEST_FRONT_LHS']    = guitk.BCLineEditGetText(LE['WHEEL_LIP_TO_GROUND_TEST_FRONT_LHS']) 
+
+    GUIvalue['WHEEL_LIP_DIRECT_FRONT_LHS']            = guitk.BCLineEditGetText(LE['WHEEL_LIP_DIRECT_FRONT_LHS']) 
+
+    GUIvalue['WHEEL_CENTER_POINT_DIRECT_FRONT_LHS']   = filter_number(guitk.BCButtonText(PB['WHEEL_CENTER_POINT_DIRECT_FRONT_LHS']))
+    GUIvalue['WHEEL_LIP_POINT_DIRECT_FRONT_LHS']      = filter_number(guitk.BCButtonText(PB['WHEEL_LIP_POINT_DIRECT_FRONT_LHS']))
+ 
+    GUIvalue['WHEEL_CENTER_X_DESIGN_REAR_LHS']        = guitk.BCLineEditGetText(LE['WHEEL_CENTER_X_DESIGN_REAR_LHS']) 
+    GUIvalue['WHEEL_CENTER_Y_DESIGN_REAR_LHS']        = guitk.BCLineEditGetText(LE['WHEEL_CENTER_Y_DESIGN_REAR_LHS'])
+    GUIvalue['WHEEL_CENTER_Z_DESIGN_REAR_LHS']        = guitk.BCLineEditGetText(LE['WHEEL_CENTER_Z_DESIGN_REAR_LHS'])
+    GUIvalue['TIRE_MINIMUM_SLR_VDA_REAR_LHS']         = guitk.BCLineEditGetText(LE['TIRE_MINIMUM_SLR_VDA_REAR_LHS'])
+
+    GUIvalue['WHEEL_LIP_TO_GROUND_DESIGN_REAR_LHS']   = guitk.BCLineEditGetText(LE['WHEEL_LIP_TO_GROUND_DESIGN_REAR_LHS'])
+    GUIvalue['WHEEL_LIP_TO_GROUND_VDA_REAR_LHS']      = guitk.BCLineEditGetText(LE['WHEEL_LIP_TO_GROUND_VDA_REAR_LHS']) 
+    GUIvalue['WHEEL_LIP_TO_GROUND_TEST_REAR_LHS']     = guitk.BCLineEditGetText(LE['WHEEL_LIP_TO_GROUND_TEST_REAR_LHS']) 
+
+    GUIvalue['WHEEL_LIP_DIRECT_REAR_LHS']             = guitk.BCLineEditGetText(LE['WHEEL_LIP_DIRECT_REAR_LHS']) 
+
+    GUIvalue['ROLL_ANGLE']                            = guitk.BCLineEditGetText(LE['ROLL_ANGLE']) 
+    GUIvalue['PITCH_ANGLE']                           = guitk.BCLineEditGetText(LE['PITCH_ANGLE'])
+    GUIvalue['YAW_ANGLE']                             = guitk.BCLineEditGetText(LE['YAW_ANGLE'])
+
+    GUIvalue['CAMBER_DESIGN_FRONT']                   = guitk.BCLineEditGetText(LE['CAMBER_DESIGN_FRONT'])
+    GUIvalue['CAMBER_DESIGN_REAR']                    = guitk.BCLineEditGetText(LE['CAMBER_DESIGN_REAR'])
+
+    GUIvalue['NW_GROUP_TYPE']                         = guitk.BCComboBoxCurrentText(Glob['Neutral_wheel_id_type'])
+    GUIvalue['NEUTRAL_WHEEL_ID']                      = guitk.BCLineEditGetText(LE['NEUTRAL_WHEEL_ID'])
+
+    GUIvalue['WHEEL_CENTER_POINT_DIRECT_REAR_LHS']    = filter_number(guitk.BCButtonText(PB['WHEEL_CENTER_POINT_DIRECT_REAR_LHS']))
+    GUIvalue['WHEEL_LIP_POINT_DIRECT_REAR_LHS']       = filter_number(guitk.BCButtonText(PB['WHEEL_LIP_POINT_DIRECT_REAR_LHS']))
+
+# ----------------------------------------------------------------------------
+#  function    : RH_MOVE()
+#  purpose     : move body and wheels from original position to target position
+#  called from : vehicle_positioning_tool()
+#  arguments   : 
+# ----------------------------------------------------------------------------  
+def RH_MOVE():
+##
+## future, RH_MOVE .. v6 / v7 does not consider SUSPENSION L.V. independently
+##
+    start=time.time()
+    unfreezeFEshells()
+##
+## ERROR
+## wrong selection of CBAR ( discussed 6-april-2020, Viswa told, all ok )
+## only y CBAR to use NOT the x CBARs
+##
+    value_0['LV_wheels'] = base.CollectEntities(constants.NASTRAN,[Lock_view['WHEEL_FRONT'],Lock_view['WHEEL_REAR']], "__ALL_ENTITIES__")+base.CollectEntities(constants.NASTRAN,None, "CBAR")
+
+    #wheel movement
+    x1,y1,z1=value_0['WHEEL_CENTER_X_DESIGN_FRONT_LHS'], value_0['WHEEL_CENTER_Y_DESIGN_FRONT_LHS'],value_0['WHEEL_CENTER_Z_DESIGN_FRONT_LHS']
+    x2,y2,z2=value_0['WHEEL_CENTER_X_DESIGN_FRONT_LHS'],-value_0['WHEEL_CENTER_Y_DESIGN_FRONT_LHS'],value_0['WHEEL_CENTER_Z_DESIGN_FRONT_LHS']
+    x3,y3,z3=value_0['WHEEL_CENTER_X_DESIGN_REAR_LHS'],  value_0['WHEEL_CENTER_Y_DESIGN_REAR_LHS'], value_0['WHEEL_CENTER_Z_DESIGN_REAR_LHS']
+
+    x4,y4,z4=value_1['WHEEL_CENTER_X_DESIGN_FRONT_LHS'], value_1['WHEEL_CENTER_Y_DESIGN_FRONT_LHS'],value_1['WHEEL_CENTER_Z_DESIGN_FRONT_LHS']
+    x5,y5,z5=value_1['WHEEL_CENTER_X_DESIGN_FRONT_LHS'],-value_1['WHEEL_CENTER_Y_DESIGN_FRONT_LHS'],value_1['WHEEL_CENTER_Z_DESIGN_FRONT_LHS']
+    x6,y6,z6=value_1['WHEEL_CENTER_X_DESIGN_REAR_LHS'],  value_1['WHEEL_CENTER_Y_DESIGN_REAR_LHS'], value_1['WHEEL_CENTER_Z_DESIGN_REAR_LHS']
+
+    base.GeoTransform("MOVE",0,"SAME PART",  "NONE",x1,y1,z1,x2-x1,y2-y1,z2-z1,x3-x1,y3-y1,z3-z1,x4,y4,z4,x5-x4,y5-y4,z5-z4,x6-x4,y6-y4,z6-z4, value_0['LV_wheels'])
+
+    end=time.time()
+    if debug>1:    PFW('Time :'+str(round(end-start,2))+' sec : Wheels moved to Target position')
+
+# ---------------------------------
+
+    start=time.time()
+##
+## future 
+## RH_MOVE .. v6 / v7 does not consider SUSPENSION L.V. independently
+##
+    value_0['LV_body'] = base.CollectEntities(constants.NASTRAN,[Lock_view['BODY'],Lock_view['SUSPENSION_FRONT'],Lock_view['SUSPENSION_REAR']], "__ALL_ENTITIES__")
+
+    #body movement
+    x1,y1,z1=value_0['WHEEL_CENTER_X_DESIGN_FRONT_LHS'], value_0['WHEEL_CENTER_Y_DESIGN_FRONT_LHS'],value_0['WHEEL_LIP_Z_FRONT_LHS']
+    x2,y2,z2=value_0['WHEEL_CENTER_X_DESIGN_FRONT_LHS'],-value_0['WHEEL_CENTER_Y_DESIGN_FRONT_LHS'],value_0['WHEEL_LIP_Z_FRONT_LHS']
+    x3,y3,z3=value_0['WHEEL_CENTER_X_DESIGN_REAR_LHS'],  value_0['WHEEL_CENTER_Y_DESIGN_REAR_LHS'], value_0['WHEEL_LIP_Z_REAR_LHS']
+
+    x4,y4,z4=value_1['WHEEL_CENTER_X_DESIGN_FRONT_LHS'], value_1['WHEEL_CENTER_Y_DESIGN_FRONT_LHS'],value_1['WHEEL_LIP_Z_FRONT_LHS']
+    x5,y5,z5=value_1['WHEEL_CENTER_X_DESIGN_FRONT_LHS'],-value_1['WHEEL_CENTER_Y_DESIGN_FRONT_LHS'],value_1['WHEEL_LIP_Z_FRONT_LHS']
+    x6,y6,z6=value_1['WHEEL_CENTER_X_DESIGN_REAR_LHS'],  value_1['WHEEL_CENTER_Y_DESIGN_REAR_LHS'], value_1['WHEEL_LIP_Z_REAR_LHS']
+
+    base.GeoTransform("MOVE",0,"SAME PART",  "NONE",x1,y1,z1,x2-x1,y2-y1,z2-z1,x3-x1,y3-y1,z3-z1,x4,y4,z4,x5-x4,y5-y4,z5-z4,x6-x4,y6-y4,z6-z4, value_0['LV_body'])
+    end=time.time()
+
+    if debug>1:    PFW('Time :'+str(round(end-start,2))+' sec : Body moved to Target position')
+
+# ----------------------------------------------------------------------------
+#  function    : create_points()
+#  purpose     : create points of identified origin and target position 
+#  called from : vehicle_positioning_tool()
+#  arguments   : 
+# ---------------------------------------------------------------------------- 
+def create_points():
+
+    start=time.time() 
+##
+## future : do with global list elements
+##
+#front_LHS
+    Points3D['EYEBROW_FRONT_DESIGN_LHS_0']=base.Newpoint(value_0['WHEEL_CENTER_X_DESIGN_FRONT_LHS'],value_0['WHEEL_CENTER_Y_DESIGN_FRONT_LHS'],value_0['WHEEL_LIP_Z_FRONT_LHS'])  
+    Points3D["WHEEL_CENTER_FRONT_LHS_0"]= base.Newpoint(value_0['WHEEL_CENTER_X_DESIGN_FRONT_LHS'],value_0['WHEEL_CENTER_Y_DESIGN_FRONT_LHS'], value_0['WHEEL_CENTER_Z_DESIGN_FRONT_LHS']) 
+    Points3D["FLOOR_FRONT_LHS_0"]= base.Newpoint(value_0['WHEEL_CENTER_X_DESIGN_FRONT_LHS'],value_0['WHEEL_CENTER_Y_DESIGN_FRONT_LHS'],value_0['GROUND_Z_FRONT_LHS'])
+
+#front_RHS
+    Points3D['EYEBROW_FRONT_DESIGN_RHS_0']=base.Newpoint(value_0['WHEEL_CENTER_X_DESIGN_FRONT_LHS'],-value_0['WHEEL_CENTER_Y_DESIGN_FRONT_LHS'],value_0['WHEEL_LIP_Z_FRONT_LHS'])  
+    Points3D["WHEEL_CENTER_FRONT_RHS_0"]= base.Newpoint(value_0['WHEEL_CENTER_X_DESIGN_FRONT_LHS'],-value_0['WHEEL_CENTER_Y_DESIGN_FRONT_LHS'], value_0['WHEEL_CENTER_Z_DESIGN_FRONT_LHS']) 
+    Points3D["FLOOR_FRONT_RHS_0"]= base.Newpoint(value_0['WHEEL_CENTER_X_DESIGN_FRONT_LHS'],-value_0['WHEEL_CENTER_Y_DESIGN_FRONT_LHS'],value_0['GROUND_Z_FRONT_LHS'])
+
+#rear_LHS
+    Points3D['EYEBROW_REAR_DESIGN_LHS_0']=base.Newpoint(value_0['WHEEL_CENTER_X_DESIGN_REAR_LHS'],value_0['WHEEL_CENTER_Y_DESIGN_REAR_LHS'],value_0['WHEEL_LIP_Z_REAR_LHS'])  
+    Points3D["WHEEL_CENTER_REAR_LHS_0"]= base.Newpoint(value_0['WHEEL_CENTER_X_DESIGN_REAR_LHS'],value_0['WHEEL_CENTER_Y_DESIGN_REAR_LHS'], value_0['WHEEL_CENTER_Z_DESIGN_REAR_LHS']) 
+    Points3D["FLOOR_REAR_LHS_0"]= base.Newpoint(value_0['WHEEL_CENTER_X_DESIGN_REAR_LHS'],value_0['WHEEL_CENTER_Y_DESIGN_REAR_LHS'],value_0['GROUND_Z_REAR_LHS'])
+   
+#rear_RHS
+    Points3D['EYEBROW_REAR_DESIGN_RHS_0']=base.Newpoint(value_0['WHEEL_CENTER_X_DESIGN_REAR_LHS'],-value_0['WHEEL_CENTER_Y_DESIGN_REAR_LHS'],value_0['WHEEL_LIP_Z_REAR_LHS'])  
+    Points3D["WHEEL_CENTER_REAR_RHS_0"]= base.Newpoint(value_0['WHEEL_CENTER_X_DESIGN_REAR_LHS'],-value_0['WHEEL_CENTER_Y_DESIGN_REAR_LHS'], value_0['WHEEL_CENTER_Z_DESIGN_REAR_LHS']) 
+    Points3D["FLOOR_REAR_RHS_0"]= base.Newpoint(value_0['WHEEL_CENTER_X_DESIGN_REAR_LHS'],-value_0['WHEEL_CENTER_Y_DESIGN_REAR_LHS'],value_0['GROUND_Z_REAR_LHS'])
+
+#Target points
+    #duplicate points 
+    oldpoints={i for i in Points3D.items()}
+    for key,value in oldpoints:
+        newkey=key.replace('_0','_1')
+        result=base.GetEntityCardValues(constants.NASTRAN,value,('X','Y','Z'))
+        Points3D[newkey]=base.Newpoint(result['X'],result['Y'],result['Z'])
+  
+#set Name
+    for key,value in Points3D.items():base.SetEntityCardValues(constants.NASTRAN,value,{'Name': key})
+ 
+##
+## future : do with global list elements
+##
+#add to lockview
+    base.AddToLview(Lock_view['BODY'],Points3D['EYEBROW_FRONT_DESIGN_LHS_1'])
+    base.AddToLview(Lock_view['BODY'],Points3D['EYEBROW_REAR_DESIGN_LHS_1'])
+    base.AddToLview(Lock_view['BODY'],Points3D['EYEBROW_FRONT_DESIGN_RHS_1'])
+    base.AddToLview(Lock_view['BODY'],Points3D['EYEBROW_REAR_DESIGN_RHS_1'])
+
+    base.AddToLview(Lock_view['WHEEL_FRONT'],Points3D['WHEEL_CENTER_FRONT_LHS_1'])
+    base.AddToLview(Lock_view['WHEEL_FRONT'],Points3D['WHEEL_CENTER_FRONT_RHS_1'])
+
+    base.AddToLview(Lock_view['WHEEL_FRONT'],Points3D['FLOOR_FRONT_LHS_1'])
+    base.AddToLview(Lock_view['WHEEL_FRONT'],Points3D['FLOOR_FRONT_RHS_1'])
+
+    base.AddToLview(Lock_view['WHEEL_REAR'],Points3D['WHEEL_CENTER_REAR_LHS_1'])
+    base.AddToLview(Lock_view['WHEEL_REAR'],Points3D['WHEEL_CENTER_REAR_RHS_1'])
+
+    base.AddToLview(Lock_view['WHEEL_REAR'],Points3D['FLOOR_REAR_LHS_1'])
+    base.AddToLview(Lock_view['WHEEL_REAR'],Points3D['FLOOR_REAR_RHS_1'])
+
+    #Origin Coordinate
+    base.SetEntityCardValues(constants.NASTRAN,base.Newpoint(0,0,0),{'Name': "Origin_coordinates"}) 
+    end=time.time()
+    if debug>1:    PFW('Time :'+str(round(end-start,2))+' sec : 3D points created and Renamed')
+
+# ----------------------------------------------------------------------------
+#  function    : create_measurement()
+#  purpose     : create measurement bar in LHS side of front wheel and rear wheel to verify the movement 
+#  called from : vehicle_positioning_tool()
+#  arguments   : 
+# ---------------------------------------------------------------------------- 
+def create_measurement():
+    start=time.time()
+    base.CreateMeasurement([Points3D["FLOOR_FRONT_LHS_1"],Points3D["WHEEL_CENTER_FRONT_LHS_1"]], "DISTANCE")
+    base.CreateMeasurement([Points3D["FLOOR_FRONT_LHS_1"],Points3D['EYEBROW_FRONT_DESIGN_LHS_1']], "DISTANCE")
+    base.CreateMeasurement([Points3D["FLOOR_REAR_LHS_1"], Points3D["WHEEL_CENTER_REAR_LHS_1"]], "DISTANCE")
+    base.CreateMeasurement([Points3D["FLOOR_REAR_LHS_1"], Points3D['EYEBROW_REAR_DESIGN_LHS_1']], "DISTANCE")
+    end=time.time()
+    if debug>1:    PFW('Time :'+str(round(end-start,2))+' sec : Measurements created')
+
+# ----------------------------------------------------------------------------
+#  function    : create_road_floor()
+#  purpose     : Create Physical floor
+#  called from : vehicle_positioning_tool()
+#  arguments   : 
+# ---------------------------------------------------------------------------- 
+def create_road_floor():
+    start=time.time()
+    base.SurfacePlane3d([0,0,0,1,0,0,0,1,0], [5000+value_1['WHEEL_CENTER_X_DESIGN_REAR_LHS'],5000,0], [-5000+value_1['WHEEL_CENTER_X_DESIGN_FRONT_LHS'],-5000,0])
+    end=time.time()
+    if debug>1:    PFW('Time :'+str(round(end-start,2))+' sec : physical floor face Created')
+
+# ----------------------------------------------------------------------------
+#  function    :create_quad()
+#  purpose     :Create Quad elements to connect 4 Eyebrow points of Design and Target position
+#  called from :vehicle_positioning_tool()
+#  arguments   : 
+# ---------------------------------------------------------------------------- 
+def create_quad():
+
+    start=time.time()
+    #create Quad element Origin
+    base.SetANSAdefaultsValues({'element_type': 'quad'})
+    Q1 = mesh.PointCloudMesh([Points3D['EYEBROW_FRONT_DESIGN_LHS_0'],Points3D['EYEBROW_REAR_DESIGN_LHS_0'],Points3D['EYEBROW_FRONT_DESIGN_RHS_0'], Points3D['EYEBROW_REAR_DESIGN_RHS_0']])
+    pid1 = base.CreateEntity(constants.NASTRAN, "PSHELL",{'Name': 'EYEBROW_FRAME_0'})
+    base.ReplaceProperty(None,pid1,Q1)
+
+    #create Quad element Origin
+    base.SetANSAdefaultsValues({'element_type': 'quad'})
+    Q2 = mesh.PointCloudMesh([Points3D['EYEBROW_FRONT_DESIGN_LHS_1'],Points3D['EYEBROW_REAR_DESIGN_LHS_1'],Points3D['EYEBROW_FRONT_DESIGN_RHS_1'], Points3D['EYEBROW_REAR_DESIGN_RHS_1']])
+    pid2 = base.CreateEntity(constants.NASTRAN, "PSHELL",{'Name': 'EYEBROW_FRAME_1'})
+    base.ReplaceProperty(None,pid2,Q2)
+    base.AddToLview(Lock_view['BODY'],Q2)
+
+    end=time.time()
+
+    if debug>1:    PFW('Time :'+str(round(end-start,2))+' sec : Quad elements Created')
+
+# ----------------------------------------------------------------------------
+#  function    :save_ansa()
+#  purpose     :save copy of ansa in the ansa directory current model with new given name
+#  called from :vehicle_positioning_tool()
+#  arguments   : 
+# ---------------------------------------------------------------------------- 
+def save_ansa():
+    start=time.time()
+    PFW('')
+    if debug>0:    PFW('Time : '+time.strftime("%H %M %S")+': File saving....')
+    newname=base.DataBaseName().replace('.ansa', '_RH_positioned_'+str(py_vers)+'.ansa')
+    if newname.endswith('.ansa'):newname=newname+'.gz'
+    PFW('File Save Location: '+newname)
+    base.SaveAs(newname)
+    if debug>0:    PFW('Time : '+time.strftime("%H %M %S")+': File Saved')
+    end=time.time()
+    PFW('')
+    PFW('gz save RUNTIME : '+str(round(end-start,2))+' sec')
+    PFW('')
+    
+# ----------------------------------------------------------------------------
+#  function    : Exec_AERO()
+#  purpose     : collect Data from GUI related to AERO Position
+#  called from : vehicle_positioning_tool()
+#  arguments   : 
+# ---------------------------------------------------------------------------- 
+def Exec_AERO():
+
+# Aero = WHEEL_LIP_TO_GROUND_VDA_
+
+    Aero_fields=['WHEEL_CENTER_X_DESIGN_FRONT_LHS', 'WHEEL_CENTER_Y_DESIGN_FRONT_LHS', 'WHEEL_CENTER_Z_DESIGN_FRONT_LHS',
+                 'WHEEL_CENTER_X_DESIGN_REAR_LHS',  'WHEEL_CENTER_Y_DESIGN_REAR_LHS',  'WHEEL_CENTER_Z_DESIGN_REAR_LHS',
+                 'WHEEL_LIP_TO_GROUND_DESIGN_FRONT_LHS', 'TIRE_MINIMUM_SLR_VDA_FRONT_LHS', 'WHEEL_LIP_TO_GROUND_VDA_FRONT_LHS',
+                 'WHEEL_LIP_TO_GROUND_DESIGN_REAR_LHS',  'TIRE_MINIMUM_SLR_VDA_REAR_LHS',  'WHEEL_LIP_TO_GROUND_VDA_REAR_LHS',
+                 'ROLL_ANGLE','PITCH_ANGLE','YAW_ANGLE']
+          
+    for key in Aero_fields:             
+        try:value_0[key]=float(GUIvalue[key])
+        except:Error.append('**Error** : '+key)
+
+    if Error!=[]:return
+  
+    #wheel lip  
+    value_0['WHEEL_LIP_Z_FRONT_LHS']=value_0['WHEEL_CENTER_Z_DESIGN_FRONT_LHS']-value_0['TIRE_MINIMUM_SLR_VDA_FRONT_LHS']+value_0['WHEEL_LIP_TO_GROUND_DESIGN_FRONT_LHS']
+    value_0['WHEEL_LIP_Z_REAR_LHS']=value_0['WHEEL_CENTER_Z_DESIGN_REAR_LHS']-value_0['TIRE_MINIMUM_SLR_VDA_REAR_LHS']+value_0['WHEEL_LIP_TO_GROUND_DESIGN_REAR_LHS']
+
+    #Ground
+    value_0['GROUND_Z_FRONT_LHS']=value_0['WHEEL_CENTER_Z_DESIGN_FRONT_LHS']-value_0['TIRE_MINIMUM_SLR_VDA_FRONT_LHS']
+    value_0['GROUND_Z_REAR_LHS']=value_0['WHEEL_CENTER_Z_DESIGN_REAR_LHS']-value_0['TIRE_MINIMUM_SLR_VDA_REAR_LHS']
+
+#length   
+    Length = distance((value_0['WHEEL_CENTER_X_DESIGN_FRONT_LHS'],value_0['WHEEL_CENTER_Y_DESIGN_FRONT_LHS'],value_0['WHEEL_CENTER_Z_DESIGN_FRONT_LHS']),
+                      (value_0['WHEEL_CENTER_X_DESIGN_REAR_LHS'], value_0['WHEEL_CENTER_Y_DESIGN_REAR_LHS'], value_0['WHEEL_CENTER_Z_DESIGN_REAR_LHS']))
+                           
+#Target values
+
+    #wheel center
+    if GUIvalue['Target_origin'].startswith('US'):
+        value_1['WHEEL_CENTER_X_DESIGN_FRONT_LHS']=-Length/2
+        value_1['WHEEL_CENTER_X_DESIGN_REAR_LHS']=Length/2  
+    else:
+        value_1['WHEEL_CENTER_X_DESIGN_FRONT_LHS']=0
+        value_1['WHEEL_CENTER_X_DESIGN_REAR_LHS']=Length
+  
+    value_1['WHEEL_CENTER_Y_DESIGN_FRONT_LHS']=value_0['WHEEL_CENTER_Y_DESIGN_FRONT_LHS']
+    value_1['WHEEL_CENTER_Y_DESIGN_REAR_LHS']=value_0['WHEEL_CENTER_Y_DESIGN_REAR_LHS']
+
+    value_1['WHEEL_CENTER_Z_DESIGN_FRONT_LHS']=value_0['TIRE_MINIMUM_SLR_VDA_FRONT_LHS']
+    value_1['WHEEL_CENTER_Z_DESIGN_REAR_LHS']=value_0['TIRE_MINIMUM_SLR_VDA_REAR_LHS']
+
+    #wheel lip
+    value_1['WHEEL_LIP_Z_FRONT_LHS']=value_0['WHEEL_LIP_TO_GROUND_VDA_FRONT_LHS']
+    value_1['WHEEL_LIP_Z_REAR_LHS']=value_0['WHEEL_LIP_TO_GROUND_VDA_REAR_LHS']
+
+    #Ground
+    value_1['GROUND_Z_FRONT_LHS']=0
+    value_1['GROUND_Z_REAR_LHS']=0
+
+# ----------------------------------------------------------------------------
+#  function    : Exec_TEST()
+#  purpose     : collect Data from GUI related to TEST Position
+#  called from : vehicle_positioning_tool()
+#  arguments   : 
+# ---------------------------------------------------------------------------- 
+def Exec_TEST():
+
+# TEST = WHEEL_LIP_TO_GROUND_TEST_
+
+    Test_fields=['WHEEL_CENTER_X_DESIGN_FRONT_LHS', 'WHEEL_CENTER_Y_DESIGN_FRONT_LHS', 'WHEEL_CENTER_Z_DESIGN_FRONT_LHS',
+                 'WHEEL_CENTER_X_DESIGN_REAR_LHS',  'WHEEL_CENTER_Y_DESIGN_REAR_LHS',  'WHEEL_CENTER_Z_DESIGN_REAR_LHS',
+                 'WHEEL_LIP_TO_GROUND_DESIGN_FRONT_LHS', 'TIRE_MINIMUM_SLR_VDA_FRONT_LHS', 'WHEEL_LIP_TO_GROUND_TEST_FRONT_LHS',
+                 'WHEEL_LIP_TO_GROUND_DESIGN_REAR_LHS', 'TIRE_MINIMUM_SLR_VDA_REAR_LHS',   'WHEEL_LIP_TO_GROUND_TEST_REAR_LHS',
+                 'ROLL_ANGLE','PITCH_ANGLE','YAW_ANGLE']
+                 
+    for key in Test_fields:             
+        try:value_0[key]=float(GUIvalue[key])
+        except:Error.append('**Error** : '+key)
+
+    if Error!=[]:return
+ 
+    #wheel lip  
+    value_0['WHEEL_LIP_Z_FRONT_LHS']=value_0['WHEEL_CENTER_Z_DESIGN_FRONT_LHS']-value_0['TIRE_MINIMUM_SLR_VDA_FRONT_LHS']+value_0['WHEEL_LIP_TO_GROUND_DESIGN_FRONT_LHS']
+    value_0['WHEEL_LIP_Z_REAR_LHS']=value_0['WHEEL_CENTER_Z_DESIGN_REAR_LHS']-value_0['TIRE_MINIMUM_SLR_VDA_REAR_LHS']+value_0['WHEEL_LIP_TO_GROUND_DESIGN_REAR_LHS']
+
+    #Ground
+    value_0['GROUND_Z_FRONT_LHS']=value_0['WHEEL_CENTER_Z_DESIGN_FRONT_LHS']-value_0['TIRE_MINIMUM_SLR_VDA_FRONT_LHS']
+    value_0['GROUND_Z_REAR_LHS']=value_0['WHEEL_CENTER_Z_DESIGN_REAR_LHS']-value_0['TIRE_MINIMUM_SLR_VDA_REAR_LHS']
+
+#length   
+    Length = distance((value_0['WHEEL_CENTER_X_DESIGN_FRONT_LHS'],value_0['WHEEL_CENTER_Y_DESIGN_FRONT_LHS'],value_0['WHEEL_CENTER_Z_DESIGN_FRONT_LHS']),
+                      (value_0['WHEEL_CENTER_X_DESIGN_REAR_LHS'], value_0['WHEEL_CENTER_Y_DESIGN_REAR_LHS'], value_0['WHEEL_CENTER_Z_DESIGN_REAR_LHS']))
+                            
+#Target values
+
+    #wheel center
+    if GUIvalue['Target_origin'].startswith('US'):
+        value_1['WHEEL_CENTER_X_DESIGN_FRONT_LHS']=-Length/2
+        value_1['WHEEL_CENTER_X_DESIGN_REAR_LHS']=Length/2  
+    else:
+        value_1['WHEEL_CENTER_X_DESIGN_FRONT_LHS']=0
+        value_1['WHEEL_CENTER_X_DESIGN_REAR_LHS']=Length
+ 
+    value_1['WHEEL_CENTER_Y_DESIGN_FRONT_LHS']=value_0['WHEEL_CENTER_Y_DESIGN_FRONT_LHS']
+    value_1['WHEEL_CENTER_Y_DESIGN_REAR_LHS']=value_0['WHEEL_CENTER_Y_DESIGN_REAR_LHS']
+ 
+    value_1['WHEEL_CENTER_Z_DESIGN_FRONT_LHS']=value_0['TIRE_MINIMUM_SLR_VDA_FRONT_LHS']
+    value_1['WHEEL_CENTER_Z_DESIGN_REAR_LHS']=value_0['TIRE_MINIMUM_SLR_VDA_REAR_LHS']
+
+    #wheel lip
+    value_1['WHEEL_LIP_Z_FRONT_LHS']=value_0['WHEEL_LIP_TO_GROUND_TEST_FRONT_LHS']
+    value_1['WHEEL_LIP_Z_REAR_LHS']=value_0['WHEEL_LIP_TO_GROUND_TEST_REAR_LHS']
+
+    #Ground
+    value_1['GROUND_Z_FRONT_LHS']=0
+    value_1['GROUND_Z_REAR_LHS']=0
+
+# ----------------------------------------------------------------------------
+#  function    : Exec_DIRECT()
+#  purpose     : collect Data from GUI related to Direct Position
+#  called from : vehicle_positioning_tool()
+#  arguments   : 
+# ----------------------------------------------------------------------------     
+def Exec_DIRECT():
+
+    Direct_fields=['WHEEL_CENTER_POINT_DIRECT_FRONT_LHS','WHEEL_CENTER_POINT_DIRECT_REAR_LHS','WHEEL_LIP_POINT_DIRECT_FRONT_LHS','WHEEL_LIP_POINT_DIRECT_REAR_LHS', 'WHEEL_LIP_DIRECT_FRONT_LHS','WHEEL_LIP_DIRECT_REAR_LHS',
+    'TIRE_MINIMUM_SLR_VDA_FRONT_LHS','TIRE_MINIMUM_SLR_VDA_REAR_LHS',
+    'ROLL_ANGLE','PITCH_ANGLE','YAW_ANGLE']
+                 
+    for key in Direct_fields:             
+        try:value_0[key]=float(GUIvalue[key])
+        except:Error.append('**Error** : '+key)
+ 
+    if Error!=[]:return
+
+#wheel center front
+    point = base.GetEntity(constants.NASTRAN, "POINT",int(value_0['WHEEL_CENTER_POINT_DIRECT_FRONT_LHS']));temp.append(point)
+    (value_0['WHEEL_CENTER_X_DESIGN_FRONT_LHS'],value_0['WHEEL_CENTER_Y_DESIGN_FRONT_LHS'],value_0['WHEEL_CENTER_Z_DESIGN_FRONT_LHS']) = base.Cog(point)
+
+#wheel center rear  
+    point = base.GetEntity(constants.NASTRAN, "POINT",int(value_0['WHEEL_CENTER_POINT_DIRECT_REAR_LHS']));temp.append(point)
+    (value_0['WHEEL_CENTER_X_DESIGN_REAR_LHS'],value_0['WHEEL_CENTER_Y_DESIGN_REAR_LHS'],value_0['WHEEL_CENTER_Z_DESIGN_REAR_LHS']) = base.Cog(point)
+
+#wheel lip front  
+    point = base.GetEntity(constants.NASTRAN, "POINT",int(value_0['WHEEL_LIP_POINT_DIRECT_FRONT_LHS']));temp.append(point)
+    value_0['WHEEL_LIP_Z_FRONT_LHS']=base.Cog(point)[2]
+
+#wheel lip rear     
+    point = base.GetEntity(constants.NASTRAN, "POINT",int(value_0['WHEEL_LIP_POINT_DIRECT_REAR_LHS']));temp.append(point)
+    value_0['WHEEL_LIP_Z_REAR_LHS']=base.Cog(point)[2] 
+ 
+    value_0['TIRE_MINIMUM_SLR_VDA_FRONT_LHS']= value_0['TIRE_MINIMUM_SLR_VDA_FRONT_LHS']
+    value_0['TIRE_MINIMUM_SLR_VDA_REAR_LHS']= value_0['TIRE_MINIMUM_SLR_VDA_REAR_LHS']
+ 
+    value_0['WHEEL_LIP_TO_GROUND_DESIGN_FRONT_LHS']=value_0['WHEEL_LIP_Z_FRONT_LHS']-value_0['WHEEL_CENTER_Z_DESIGN_FRONT_LHS']+value_0['TIRE_MINIMUM_SLR_VDA_FRONT_LHS']
+    value_0['WHEEL_LIP_TO_GROUND_DESIGN_REAR_LHS']=value_0['WHEEL_LIP_Z_REAR_LHS']-value_0['WHEEL_CENTER_Z_DESIGN_REAR_LHS']+value_0['TIRE_MINIMUM_SLR_VDA_REAR_LHS']
+
+#Ground 
+    value_0['GROUND_Z_FRONT_LHS']=value_0['WHEEL_CENTER_Z_DESIGN_FRONT_LHS']-value_0['TIRE_MINIMUM_SLR_VDA_FRONT_LHS']
+    value_0['GROUND_Z_REAR_LHS']=value_0['WHEEL_CENTER_Z_DESIGN_REAR_LHS']-value_0['TIRE_MINIMUM_SLR_VDA_REAR_LHS']
+ 
+    Length = distance((value_0['WHEEL_CENTER_X_DESIGN_FRONT_LHS'],value_0['WHEEL_CENTER_Y_DESIGN_FRONT_LHS'],value_0['WHEEL_CENTER_Z_DESIGN_FRONT_LHS']),
+                      (value_0['WHEEL_CENTER_X_DESIGN_REAR_LHS'], value_0['WHEEL_CENTER_Y_DESIGN_REAR_LHS'], value_0['WHEEL_CENTER_Z_DESIGN_REAR_LHS']))
+
+    if GUIvalue['Target_origin'].startswith('US'):
+        value_1['WHEEL_CENTER_X_DESIGN_FRONT_LHS']=-Length/2
+        value_1['WHEEL_CENTER_X_DESIGN_REAR_LHS']=Length/2  
+    else:
+        value_1['WHEEL_CENTER_X_DESIGN_FRONT_LHS']=0
+        value_1['WHEEL_CENTER_X_DESIGN_REAR_LHS']=Length
+
+    value_1['WHEEL_CENTER_Y_DESIGN_FRONT_LHS']=value_0['WHEEL_CENTER_Y_DESIGN_FRONT_LHS']
+    value_1['WHEEL_CENTER_Y_DESIGN_REAR_LHS']=value_0['WHEEL_CENTER_Y_DESIGN_REAR_LHS']
+
+    value_1['WHEEL_CENTER_Z_DESIGN_FRONT_LHS']=value_0['TIRE_MINIMUM_SLR_VDA_FRONT_LHS']
+    value_1['WHEEL_CENTER_Z_DESIGN_REAR_LHS']=value_0['TIRE_MINIMUM_SLR_VDA_REAR_LHS']
+
+    value_1['WHEEL_LIP_Z_FRONT_LHS']=value_0['WHEEL_LIP_TO_GROUND_DESIGN_FRONT_LHS']+value_0['WHEEL_LIP_DIRECT_FRONT_LHS']
+    value_1['WHEEL_LIP_Z_REAR_LHS']=value_0['WHEEL_LIP_TO_GROUND_DESIGN_REAR_LHS']+value_0['WHEEL_LIP_DIRECT_REAR_LHS']
+   
+   #Ground
+    value_1['GROUND_Z_FRONT_LHS']=0
+    value_1['GROUND_Z_REAR_LHS']=0 
+
+
+# ----------------------------------------------------------------------------
+#  function    : apply_roll()
+#  purpose     : rotate vehicle body based on x axis for the given angle
+#  called from : vehicle_positioning_tool()
+#  arguments   : inconsistent to other functions
+# ---------------------------------------------------------------------------- 
+## ERROR ORIGIN
+## tasklist : BODY roll ( origin = center point between the 4 EYEBrow points around X axis )
+##
+def apply_roll():
+    ents=value_0['LV_body']
+    angle=float(value_0['ROLL_ANGLE'])
+    base.GeoRotate("MOVE",0,"SAME PART","NONE",0,0,0,1,0,0,angle,ents)
+    return
+
+# ----------------------------------------------------------------------------
+#  function    : apply_pitch()
+#  purpose     : rotate vehicle body based on y axis for the given angle
+#  called from : vehicle_positioning_tool()
+#  arguments   : x=0(just for future usage)
+# ---------------------------------------------------------------------------- 
+## ERROR ORIGIN
+## tasklist : BODY pitch ( origin = center point between the 4 EYEBrow points around Y axis )
+## inconsistent and wrong "x"
+##
+def apply_pitch(x):
+    ents=value_0['LV_body']
+    angle=float(value_0['PITCH_ANGLE'])
+    base.GeoRotate("MOVE",0,"SAME PART","NONE",x,0,0,x,1,0,angle,ents)
+    return
+
+# ----------------------------------------------------------------------------
+#  function    : apply_YAW()
+#  purpose     : rotate vehicle body based on z axis for the given angle
+#  called from : vehicle_positioning_tool()
+#  arguments   : x=0(just for future usage)
+# ---------------------------------------------------------------------------- 
+## ORIGIN
+## tasklist : BODY yaw ( origin = center point between the 4 EYEBrow points around Z axis )
+## inconsistent x 
+##
+def apply_yaw(x):
+    ents=value_0['LV_body']+value_0['LV_wheels']
+    angle=float(value_0['YAW_ANGLE'])
+    base.GeoRotate("MOVE",0,"SAME PART","NONE",x,0,0,x,0,1,angle,ents)
+    return
+
+# ----------------------------------------------------------------------------
+#  function    : pick_lv()
+#  purpose     : select L.V.
+#  called from : wheel_position_tool
+#  arguments   :
+#              a: None
+#              b: None
+# ----------------------------------------------------------------------------
+def pick_lv(a=None,b=None):
+
+    if guitk.BCComboBoxCurrentText(Glob['Neutral_wheel_id_type'])=='Locked View ID':
+        lv = base.PickEntities(constants.NASTRAN,'LOCK_VIEW')
+        if lv==None:return
+
+        guitk.BCLineEditSetText(LE['NEUTRAL_WHEEL_ID'],str(lv[0]._id))
+ 
+    elif guitk.BCComboBoxCurrentText(Glob['Neutral_wheel_id_type'])=='Wheel Group or Part module ID':
+        parts = base.PickEntities(constants.NASTRAN,['ANSAPART','ANSAGROUP'])
+        if parts==None :return
+ 
+        x=[str(base.GetEntityCardValues(constants.NASTRAN, part,('Module Id',))['Module Id']) for part in parts]
+        guitk.BCLineEditSetText(LE['NEUTRAL_WHEEL_ID'],','.join(x))
+ 
+    elif guitk.BCComboBoxCurrentText(Glob['Neutral_wheel_id_type'])=='Pick entities from screen':
+ 
+        Lviews=base.CollectEntities(constants.NASTRAN,None, "LOCK_VIEW")
+        for Lview in Lviews:
+            if Lview._name=='screenpick':base.DeleteEntity(Lview,True);break
+        newLview=base.CreateEntity(constants.NASTRAN, "LOCK_VIEW", {'Name': 'screenpick'})
+ 
+        ents=base.PickEntities(constants.NASTRAN,"__ALL_ENTITIES__")
+        if ents==None:return
+ 
+        base.AddToLview(newLview, ents)
+        guitk.BCLineEditSetText(LE['NEUTRAL_WHEEL_ID'],str(newLview._id))
+
+    return
+
+# ----------------------------------------------------------------------------
+#  function    : check_WPOS_values()
+#  purpose     : check the availability of values in GUI
+#  called from : wheel positioning tool
+#  arguments   :   
+# ----------------------------------------------------------------------------
+def check_WPOS_values():
+    wheel_position_fields=[
+    'WHEEL_CENTER_X_DESIGN_FRONT_LHS', 'WHEEL_CENTER_Y_DESIGN_FRONT_LHS', 'WHEEL_CENTER_Z_DESIGN_FRONT_LHS',
+    'WHEEL_CENTER_X_DESIGN_REAR_LHS',  'WHEEL_CENTER_Y_DESIGN_REAR_LHS',  'WHEEL_CENTER_Z_DESIGN_REAR_LHS',
+    'TIRE_MINIMUM_SLR_VDA_FRONT_LHS',  'TIRE_MINIMUM_SLR_VDA_REAR_LHS',
+    'CAMBER_DESIGN_FRONT', 'CAMBER_DESIGN_REAR' , 'NEUTRAL_WHEEL_ID']
+
+    for key in wheel_position_fields:             
+        try:value_0[key]=float(GUIvalue[key])
+        except:Error.append(key)
+
+# ----------------------------------------------------------------------------
+#  function    : move_wheels()
+#  purpose     : move wheels to given value
+#  called from : wheel positioning tool
+#  arguments   :  
+# ----------------------------------------------------------------------------
+def move_wheels():
+    start=time.time()
+
+      #Get entity from GUI
+    if GUIvalue['NW_GROUP_TYPE'] == 'Locked View ID' or GUIvalue['NW_GROUP_TYPE'] == 'Pick entities from screen':
+        LV_NW = base.GetEntity(constants.NASTRAN, "LOCK_VIEW", int(value_0['NEUTRAL_WHEEL_ID']))
+     
+    elif GUIvalue['NW_GROUP_TYPE'] == 'Wheel Group or Part module ID':
+        LV_NW = base.GetPartFromModuleId(str(value_0['NEUTRAL_WHEEL_ID']))
+
+    NW = base.CollectEntities(constants.NASTRAN,LV_NW, ['FACE', 'SHELL', 'POINT', 'CURVE'])
+    if NW==[]:Error.append('**Error**: No entities found');return
+
+    #rename neutral wheel point
+    points = base.CollectEntities(constants.NASTRAN,LV_NW, "POINT")
+    if len(points)!=1: PFW('check center point in Neutral wheel lockview');return
+    base.SetEntityCardValues(constants.NASTRAN,points[0],{'Name':'WHEEL_NEUTRAL_0'})
+    Points3D['WHEEL_CENTER_NEUTRAL_0']=points[0]
+
+#front wheel LHS   
+    collector = base.CollectNewModelEntities()
+    base.GeoTranslate("COPY",0, "NEW INSTANCE", "NONE", value_0['WHEEL_CENTER_X_DESIGN_FRONT_LHS'],value_0['WHEEL_CENTER_Y_DESIGN_FRONT_LHS'],value_0['WHEEL_CENTER_Z_DESIGN_FRONT_LHS'], NW)
+    entities['WHEEL_FRONT_LHS'] = collector.report()
+
+    if debug>0:PFW('Positioning FRONT wheel with camber angle:'+ str(value_0['CAMBER_DESIGN_FRONT']))
+
+#front wheel RHS   
+
+    base.GeoRotate("MOVE", 0, "SAME PART", "NONE",
+     value_0['WHEEL_CENTER_X_DESIGN_FRONT_LHS'],value_0['WHEEL_CENTER_Y_DESIGN_FRONT_LHS'],value_0['WHEEL_CENTER_Z_DESIGN_FRONT_LHS'],
+     value_0['WHEEL_CENTER_X_DESIGN_FRONT_LHS']+ 10,value_0['WHEEL_CENTER_Y_DESIGN_FRONT_LHS'],value_0['WHEEL_CENTER_Z_DESIGN_FRONT_LHS'],
+     value_0['CAMBER_DESIGN_FRONT'],entities['WHEEL_FRONT_LHS'])
+ 
+    if debug>0:PFW('Creating front symmetry wheel')
+    collector = base.CollectNewModelEntities()
+    base.GeoSymmetry("COPY", 0, "NEW INSTANCE", "NONE", entities['WHEEL_FRONT_LHS'])
+    entities['WHEEL_FRONT_RHS'] = collector.report()
+
+#rear wheel LHS  
+
+    collector = base.CollectNewModelEntities()
+    base.GeoTranslate("COPY",0, "NEW INSTANCE", "NONE", 
+    value_0['WHEEL_CENTER_X_DESIGN_REAR_LHS'],value_0['WHEEL_CENTER_Y_DESIGN_REAR_LHS'],value_0['WHEEL_CENTER_Z_DESIGN_REAR_LHS'], NW) 
+    entities['WHEEL_REAR_LHS'] = collector.report()
+
+#rear wheel RHS
+    if debug>0:PFW('Positioning REAR wheel with camber angle:'+ str(value_0['CAMBER_DESIGN_REAR']))
+
+    base.GeoRotate("MOVE", 0, "SAME PART", "NONE",
+    value_0['WHEEL_CENTER_X_DESIGN_REAR_LHS'],value_0['WHEEL_CENTER_Y_DESIGN_REAR_LHS'],value_0['WHEEL_CENTER_Z_DESIGN_REAR_LHS'],
+    value_0['WHEEL_CENTER_X_DESIGN_REAR_LHS']+ 10,value_0['WHEEL_CENTER_Y_DESIGN_REAR_LHS'],value_0['WHEEL_CENTER_Z_DESIGN_REAR_LHS'],
+    value_0['CAMBER_DESIGN_REAR'] , entities['WHEEL_REAR_LHS'])
+   
+    if debug>0:PFW('Creating rear symmetry wheel')
+    collector = base.CollectNewModelEntities()
+    base.GeoSymmetry("COPY", 0, "NEW INSTANCE", "NONE", entities['WHEEL_REAR_LHS'])
+    entities['WHEEL_REAR_RHS'] = collector.report()
+
+    for i in entities:
+        points = base.CollectEntities(constants.NASTRAN,entities[i], "POINT")
+        if len(points)==1:
+            x=i.replace('WHEEL','WHEEL_CENTER')
+            Points3D[x+'_1']=points[0]
+            base.SetEntityCardValues(constants.NASTRAN,points[0],{'Name':x+'_1'})
+
+    end=time.time()
+    if debug>0:    PFW('Time :'+str(round(end-start,2))+' sec : Wheels copied to Target position')
+ 
+# ----------------------------------------------------------------------------
+#  function    : create_CBAR()
+#  purpose     : create named CBAR elements between wheel centers and floor points
+#  called from : wheel positioning tool
+#  arguments   :  
+# ----------------------------------------------------------------------------
+def create_CBAR():
+
+    finalPshells = base.CollectEntities(constants.NASTRAN, None, 'PSHELL')
+    pshellIDs = []
+    for pshell in finalPshells:
+        pshellIDs.append(pshell._id)
+    finalMaxID = max(pshellIDs) + 1
+
+    #wheel center
+    wheelGridFL = base.CreateEntity(constants.NASTRAN, 'GRID', 
+            {'X1': value_0['WHEEL_CENTER_X_DESIGN_FRONT_LHS'], 'X2':value_0['WHEEL_CENTER_Y_DESIGN_FRONT_LHS'], 'X3':value_0['WHEEL_CENTER_Z_DESIGN_FRONT_LHS']    })
+    wheelGridFR    =  base.CreateEntity(constants.NASTRAN, 'GRID', 
+            {'X1': value_0['WHEEL_CENTER_X_DESIGN_FRONT_LHS'], 'X2':-value_0['WHEEL_CENTER_Y_DESIGN_FRONT_LHS'], 'X3':value_0['WHEEL_CENTER_Z_DESIGN_FRONT_LHS']    })
+    wheelGridRL = base.CreateEntity(constants.NASTRAN, 'GRID', 
+            {'X1': value_0['WHEEL_CENTER_X_DESIGN_REAR_LHS'], 'X2':value_0['WHEEL_CENTER_Y_DESIGN_REAR_LHS'], 'X3':value_0['WHEEL_CENTER_Z_DESIGN_REAR_LHS']    })
+    wheelGridRR = base.CreateEntity(constants.NASTRAN, 'GRID', 
+            {'X1': value_0['WHEEL_CENTER_X_DESIGN_REAR_LHS'], 'X2':-value_0['WHEEL_CENTER_Y_DESIGN_REAR_LHS'], 'X3':value_0['WHEEL_CENTER_Z_DESIGN_REAR_LHS']    })
+
+    entities['CBAR_WC_FRONT'] = base.CreateEntity(constants.NASTRAN, 'CBAR', {'Name':'Wheel_Center_Y_connect_FRONT','PID':finalMaxID, 'GA':wheelGridFL._id, 'GB':wheelGridFR._id, 'X1':1, 'X2':1, 'X3':0})
+    entities['CBAR_WC_REAR'] = base.CreateEntity(constants.NASTRAN, 'CBAR', {'Name':'Wheel_Center_Y_connect_REAR','PID':finalMaxID, 'GA':wheelGridRL._id, 'GB':wheelGridRR._id, 'X1':1, 'X2':1, 'X3':0})
+    entities['CBAR_WC_LEFT']  = base.CreateEntity(constants.NASTRAN, 'CBAR', {'Name':'Wheel_Center_X_front_rear_RHS','PID':finalMaxID, 'GA':wheelGridFR._id, 'GB':wheelGridRR._id, 'X1':1, 'X2':1, 'X3':0})
+    entities['CBAR_WC_RIGHT']  = base.CreateEntity(constants.NASTRAN, 'CBAR', {'Name':'Wheel_Center_X_front_rear_LHS','PID':finalMaxID, 'GA':wheelGridFL._id, 'GB':wheelGridRL._id, 'X1':1, 'X2':1, 'X3':0})
+ 
+    #floor
+    floorGridFL    =   base.CreateEntity(constants.NASTRAN, 'GRID', {'X1': value_0['WHEEL_CENTER_X_DESIGN_FRONT_LHS'], 'X2':value_0['WHEEL_CENTER_Y_DESIGN_FRONT_LHS'],
+             'X3':value_0['WHEEL_CENTER_Z_DESIGN_FRONT_LHS'] -value_0['TIRE_MINIMUM_SLR_VDA_FRONT_LHS']    })
+    floorGridFR    =   base.CreateEntity(constants.NASTRAN, 'GRID', {'X1': value_0['WHEEL_CENTER_X_DESIGN_FRONT_LHS'], 'X2':-value_0['WHEEL_CENTER_Y_DESIGN_FRONT_LHS'],
+             'X3':value_0['WHEEL_CENTER_Z_DESIGN_FRONT_LHS'] -value_0['TIRE_MINIMUM_SLR_VDA_FRONT_LHS']    })
+    floorGridRL    =   base.CreateEntity(constants.NASTRAN, 'GRID', {'X1': value_0['WHEEL_CENTER_X_DESIGN_REAR_LHS'], 'X2':value_0['WHEEL_CENTER_Y_DESIGN_REAR_LHS'],
+             'X3':value_0['WHEEL_CENTER_Z_DESIGN_REAR_LHS']-value_0['TIRE_MINIMUM_SLR_VDA_REAR_LHS']    })
+    floorGridRR = base.CreateEntity(constants.NASTRAN, 'GRID', {'X1': value_0['WHEEL_CENTER_X_DESIGN_REAR_LHS'], 'X2':-value_0['WHEEL_CENTER_Y_DESIGN_REAR_LHS'],
+             'X3':value_0['WHEEL_CENTER_Z_DESIGN_REAR_LHS']-value_0['TIRE_MINIMUM_SLR_VDA_REAR_LHS']    })
+
+    entities['CBAR_FLOOR_FRONT']  = base.CreateEntity(constants.NASTRAN, 'CBAR', {'Name':'Wheel_TRACK_FRONT', 'PID':finalMaxID, 'GA':floorGridFL._id, 'GB':floorGridFR._id, 'X1':1, 'X2':1, 'X3':0})
+    entities['CBAR_FLOOR_REAR']  = base.CreateEntity(constants.NASTRAN, 'CBAR', {'Name':'Wheel_TRACK_REAR', 'PID':finalMaxID, 'GA':floorGridRL._id, 'GB':floorGridRR._id, 'X1':1, 'X2':1, 'X3':0})
+    entities['CBAR_FLOOR_LEFT']  = base.CreateEntity(constants.NASTRAN, 'CBAR', {'Name':'WHEELBASE_LHS', 'PID':finalMaxID, 'GA':floorGridFL._id, 'GB':floorGridRL._id, 'X1':1, 'X2':1, 'X3':0})
+    entities['CBAR_FLOOR_RIGHT']  = base.CreateEntity(constants.NASTRAN, 'CBAR', {'Name':'WHEELBASE_RHS', 'PID':finalMaxID, 'GA':floorGridFR._id, 'GB':floorGridRR._id, 'X1':1, 'X2':1, 'X3':0})
+
+# ----------------------------------------------------------------------------
+#  function    : create_Lockview()
+#  purpose     : set wheels Lockview manager
+#  called from : wheel positioning tool
+#  arguments   : 
+# ----------------------------------------------------------------------------
+def create_Lockview():
+    LV=base.CreateEntity(constants.NASTRAN, "LOCK_VIEW",{'Name': 'WHEEL_FRONT'})
+    base.AddToLview(LV, entities['WHEEL_FRONT_LHS'] +entities['WHEEL_FRONT_RHS'] +[entities['CBAR_WC_FRONT'] ,entities['CBAR_FLOOR_FRONT']])
+
+    LV=base.CreateEntity(constants.NASTRAN, "LOCK_VIEW",{'Name': 'WHEEL_REAR'})
+    base.AddToLview(LV, entities['WHEEL_REAR_LHS'] +entities['WHEEL_REAR_RHS'] +[entities['CBAR_WC_REAR'] ,entities['CBAR_FLOOR_REAR']])
+
+# ----------------------------------------------------------------------------
+#  function    : create_part()
+#  purpose     : set wheels parts manager
+#  called from : wheel positioning tool
+#  arguments   : 
+# ----------------------------------------------------------------------------
+def create_part():
+
+    part_wheel_Front_LHS = base.CreateEntity(constants.NASTRAN, 'ANSAPART', {'Name':'wheel_front_LHS'})
+    base.SwitchGroupOrPart(part_wheel_Front_LHS)
+    base.SetEntityPart(entities['WHEEL_FRONT_LHS'] , part_wheel_Front_LHS)
+
+    part_wheel_Front_RHS = base.CreateEntity(constants.NASTRAN, 'ANSAPART', {'Name':'wheel_front_RHS'})
+    base.SwitchGroupOrPart(part_wheel_Front_RHS)
+    base.SetEntityPart(entities['WHEEL_FRONT_RHS'] , part_wheel_Front_RHS)
+
+    part_wheel_Rear_LHS = base.CreateEntity(constants.NASTRAN, 'ANSAPART', {'Name':'wheel_rear_LHS'})
+    base.SwitchGroupOrPart(part_wheel_Rear_LHS)
+    base.SetEntityPart(entities['WHEEL_REAR_LHS'] , part_wheel_Rear_LHS)
+
+    part_wheel_Rear_RHS = base.CreateEntity(constants.NASTRAN, 'ANSAPART', {'Name':'wheel_rear_RHS'})
+    base.SwitchGroupOrPart(part_wheel_Rear_RHS)
+    base.SetEntityPart(entities['WHEEL_REAR_RHS'] , part_wheel_Rear_RHS)
+
+    frame_part = base.CreateEntity(constants.NASTRAN, 'ANSAPART', {'Name':'hardpoint_frame'})
+    base.SetEntityPart([entities['CBAR_FLOOR_FRONT'],entities['CBAR_FLOOR_REAR'],entities['CBAR_FLOOR_LEFT'],entities['CBAR_FLOOR_RIGHT'],
+                        entities['CBAR_WC_FRONT'],entities['CBAR_WC_REAR'],entities['CBAR_WC_LEFT'],entities['CBAR_WC_RIGHT']],frame_part)
+
+
+# ----------------------------------------------------------------------------
+#  function    : Coordinate_report()
+#  purpose     : print final coordinates to log file
+#  called from : vehicle_positioning_tool()
+#  arguments   : 
+# ---------------------------------------------------------------------------- 
+def Coordinate_report():
+
+    WC_F=base.GetEntityCardValues(constants.NASTRAN,Points3D["WHEEL_CENTER_FRONT_LHS_1"],('X','Y','Z'))
+    WC_R=base.GetEntityCardValues(constants.NASTRAN,Points3D["WHEEL_CENTER_REAR_LHS_1"],('X','Y','Z'))
+    EB_F=base.GetEntityCardValues(constants.NASTRAN,Points3D['EYEBROW_FRONT_DESIGN_RHS_1'],('X','Y','Z'))
+    EB_R=base.GetEntityCardValues(constants.NASTRAN,Points3D['EYEBROW_REAR_DESIGN_RHS_1'],('X','Y','Z'))
+    F_F=base.GetEntityCardValues(constants.NASTRAN,Points3D["FLOOR_FRONT_LHS_1"],('X','Y','Z'))
+    F_R=base.GetEntityCardValues(constants.NASTRAN,Points3D["FLOOR_REAR_LHS_1"],('X','Y','Z'))
+
+    PFW('')
+    PFW('###################################################################')
+    PFW('Final Coordinates Report')
+    PFW('###################################################################')
+    PFW('')
+    PFW('Front wheel center X   = '+str(WC_F['X']))
+    PFW('Front wheel center Y   = '+str(WC_F['Y']))
+    PFW('Front wheel center Z   = '+str(WC_F['Z']))
+    PFW('-------------------------------------------------------------------')
+    PFW('Rear wheel center X    = '+str(WC_R['X']))
+    PFW('Rear wheel center Y    = '+str(WC_R['Y']))
+    PFW('Rear wheel center Z    = '+str(WC_R['Z']))
+    PFW('-------------------------------------------------------------------')
+    PFW('Front PT10 X           = '+str(F_F['X']))
+    PFW('Front PT10 Y           = '+str(F_F['Y']))
+    PFW('Front PT10 Z           = '+str(F_F['Z']))
+    PFW('-------------------------------------------------------------------')
+    PFW('Rear PT10 X            = '+str(F_R['X']))
+    PFW('Rear PT10 Y            = '+str(F_R['Y']))
+    PFW('Rear PT10 Z            = '+str(F_R['Z']))
+    PFW('-------------------------------------------------------------------')
+    PFW('Front eyebrow X        = '+str(EB_F['X']))
+    PFW('Front eyebrow Y        = '+str(EB_F['Y']))
+    PFW('Front eyebrow Z        = '+str(EB_F['Z']))
+    PFW('-------------------------------------------------------------------')
+    PFW('Rear eyebrow X         = '+str(EB_R['X']))
+    PFW('Rear eyebrow Y         = '+str(EB_R['Y']))
+    PFW('Rear eyebrow Z         = '+str(EB_R['Z']))
+    PFW('-------------------------------------------------------------------')
+    PFW('Distance between front wheel center and physical floor   = '+str(WC_F['Z']))
+    PFW('Distance between physical floor and front eyebrow        = '+str(EB_F['Z']))
+    PFW('Distance between rear wheel center and physical floor    = '+str(WC_R['Z']))
+    PFW('Distance between physical floor and rear eyebrow         = '+str(EB_R['Z']))
+    PFW('-------------------------------------------------------------------')
+    PFW('')
+
+# ----------------------------------------------------------------------------
+#  function    : attitude_Report()
+#  purpose     : print attitude file values used in vehicle position/wheel position to log file and window
+#  called from : vehicle position/wheel position
+#  arguments   :
+# ---------------------------------------------------------------------------- 
+def attitude_Report():
+##
+## future : simply copy / paste ATTITUDE txt in LOG !
+##
+    for i in Attitude_fields.values():
+        if i not in attitude_data:attitude_data[i]=''
+    PFW('')
+    PFW('###################################################################')
+    PFW('Attitude File Values')
+    PFW('###################################################################')
+    PFW('')
+    PFW('Target_position                  = ' +attitude_data[Attitude_fields['Positioning_option']])
+    PFW('Target_coordinate_origin         = ' +attitude_data[Attitude_fields['Target_origin']])
+    PFW('#')
+    PFW('#-------------------------------------------------------------------')
+    PFW('#ATTITUDE HARDPOINTS front') 
+    PFW('#-------------------------------------------------------------------')
+    PFW('#')
+    PFW('Wheel_Center_9_front_X_DESIGN    = ' +attitude_data[Attitude_fields['WHEEL_CENTER_X_DESIGN_FRONT_LHS']])
+    PFW('Wheel_Center_9_front_Y_DESIGN    = ' +attitude_data[Attitude_fields['WHEEL_CENTER_Y_DESIGN_FRONT_LHS']])
+    PFW('Wheel_Center_9_front_Z_DESIGN    = ' +attitude_data[Attitude_fields['WHEEL_CENTER_Z_DESIGN_FRONT_LHS']])
+    PFW('Wheel_Center_9_front_Z_VDA       = ' +attitude_data[Attitude_fields['WHEEL_CENTER_Z_VDA_FRONT_LHS']])
+    PFW('#')
+    PFW('Tire_minimum_SLR_front_DESIGN    = ' +attitude_data[Attitude_fields['TIRE_MINIMUM_SLR_DESIGN_FRONT_LHS']])
+    PFW('Tire_minimum_SLR_front_VDA       = ' +attitude_data[Attitude_fields['TIRE_MINIMUM_SLR_VDA_FRONT_LHS']])
+    PFW('#')
+    PFW('Wheel_Lip_to_Ground_front_DESIGN = ' +attitude_data[Attitude_fields['WHEEL_LIP_TO_GROUND_DESIGN_FRONT_LHS']])
+    PFW('Wheel_Lip_to_Ground_front_VDA    = ' +attitude_data[Attitude_fields['WHEEL_LIP_TO_GROUND_VDA_FRONT_LHS']])
+    PFW('#')
+    PFW('Camber_DESIGN_front              = ' +str(attitude_data[Attitude_fields['CAMBER_DESIGN_FRONT']]))
+    PFW('#')
+    PFW('#-------------------------------------------------------------------')
+    PFW('#ATTITUDE HARDPOINTS rear ') 
+    PFW('#-------------------------------------------------------------------')
+    PFW('#')
+    PFW('Wheel_Center_9_rear_X_DESIGN     = ' +attitude_data[Attitude_fields['WHEEL_CENTER_X_DESIGN_REAR_LHS']])
+    PFW('Wheel_Center_9_rear_Y_DESIGN     = ' +attitude_data[Attitude_fields['WHEEL_CENTER_Y_DESIGN_REAR_LHS']])
+    PFW('Wheel_Center_9_rear_Z_DESIGN     = ' +attitude_data[Attitude_fields['WHEEL_CENTER_Z_DESIGN_REAR_LHS']])
+    PFW('Wheel_Center_9_rear_Z_VDA        = ' +attitude_data[Attitude_fields['WHEEL_CENTER_Z_VDA_REAR_LHS']])
+    PFW('#')
+    PFW('Tire_minimum_SLR_rear_DESIGN     = ' +attitude_data[Attitude_fields['TIRE_MINIMUM_SLR_DESIGN_REAR_LHS']])
+    PFW('Tire_minimum_SLR_rear_VDA        = ' +attitude_data[Attitude_fields['TIRE_MINIMUM_SLR_VDA_REAR_LHS']])
+    PFW('#')
+    PFW('Wheel_Lip_to_Ground_rear_DESIGN  = ' +attitude_data[Attitude_fields['WHEEL_LIP_TO_GROUND_DESIGN_REAR_LHS']])
+    PFW('Wheel_Lip_to_Ground_rear_VDA     = ' +attitude_data[Attitude_fields['WHEEL_LIP_TO_GROUND_VDA_REAR_LHS']])
+    PFW('#')
+    PFW('Camber_DESIGN_rear               = ' +str(attitude_data[Attitude_fields['CAMBER_DESIGN_REAR']]))
+    PFW('#')
+    PFW('#-------------------------------------------------------------------')
+    PFW('#EYEBROW AS TEST POSITION') 
+    PFW('#-------------------------------------------------------------------')
+    PFW('#')
+    PFW('Eyebrow_TEST_front_Z             = ' +attitude_data[Attitude_fields['WHEEL_LIP_TO_GROUND_TEST_FRONT_LHS']])
+    PFW('Eyebrow_TEST_rear_Z              = ' +attitude_data[Attitude_fields['WHEEL_LIP_TO_GROUND_TEST_REAR_LHS']])
+    PFW('#')
+    PFW('#-------------------------------------------------------------------')
+    PFW('#Vehicle angles') 
+    PFW('#-------------------------------------------------------------------')
+    PFW('#')
+    PFW('roll                             = ' +str(attitude_data[Attitude_fields['ROLL_ANGLE']]))
+    PFW('pitch                            = ' +str(attitude_data[Attitude_fields['PITCH_ANGLE']]))
+    PFW('yaw                              = ' +str(attitude_data[Attitude_fields['YAW_ANGLE']]))
+    PFW('#')
+    PFW('#-------------------------------------------------------------------')
+    PFW('#WHEELBASE') 
+    PFW('#-------------------------------------------------------------------')
+    PFW('#')
+    PFW('#ref only, WHEELBASE defined with PT10')
+    PFW('PT10_front_X_DESIGN              = ' +attitude_data[Attitude_fields['PT10_DESIGN_X_FRONT_LHS']])
+    PFW('PT10_rear_X_DESIGN               = ' +attitude_data[Attitude_fields['PT10_DESIGN_X_REAR_LHS']])
+    PFW('')
+    PFW('#### END ####')
+
+# ----------------------------------------------------------------------------
+#  function    : Input_Report()
+#  purpose     : print input values of vehicle position/Reverse transformation to log file and window
+#  called from : vehicle position/Reverse transformation
+#  arguments   :
+# ----------------------------------------------------------------------------
+def Input_Report():
+    PFW('')
+    PFW('')
+    PFW('')
+    PFW('###################################################################')
+    PFW('USER Input Values')
+    PFW('###################################################################')
+    PFW('')
+    PFW('Target_position                  = '+value_0['Positioning_option'])
+    PFW('Target_coordinate_origin         = '+value_0['Target_origin'])
+    PFW('-------------------------------------------------------------------')
+    PFW('Front wheel center X             = ' +str(value_0['WHEEL_CENTER_X_DESIGN_FRONT_LHS']))
+    PFW('Front wheel center Y             = ' +str(value_0['WHEEL_CENTER_Y_DESIGN_FRONT_LHS']))
+    PFW('Front wheel center Z             = ' +str(value_0['WHEEL_CENTER_Z_DESIGN_FRONT_LHS']))
+    PFW('-------------------------------------------------------------------')
+    PFW('Rear wheel center X              = '+str(value_0['WHEEL_CENTER_X_DESIGN_REAR_LHS']))
+    PFW('Rear wheel center Y              = '+str(value_0['WHEEL_CENTER_Y_DESIGN_REAR_LHS']))
+    PFW('Rear wheel center Z              = '+str(value_0['WHEEL_CENTER_Z_DESIGN_REAR_LHS']))
+    PFW('-------------------------------------------------------------------')
+    PFW('Tire minimum SLR VDA Front       = '+str(value_0['TIRE_MINIMUM_SLR_VDA_FRONT_LHS']))
+    PFW('Tire minimum SLR VDA Rear        = '+str(value_0['TIRE_MINIMUM_SLR_VDA_REAR_LHS']))
+    PFW('-------------------------------------------------------------------')
+    PFW('Wheel lip to Ground Design Front = '+str(value_0['WHEEL_LIP_TO_GROUND_DESIGN_FRONT_LHS']))
+    PFW('Wheel lip to Ground Design Rear  = '+str(value_0['WHEEL_LIP_TO_GROUND_DESIGN_REAR_LHS']))
+    if value_0['Positioning_option']=='AERO':
+       PFW('-------------------------------------------------------------------')
+       PFW('Wheel lip to Ground VDA Front    = '+str(value_0['WHEEL_LIP_TO_GROUND_VDA_FRONT_LHS']))
+       PFW('Wheel lip to Ground VDA Rear     = '+str(value_0['WHEEL_LIP_TO_GROUND_VDA_REAR_LHS']))
+    if value_0['Positioning_option']=='TEST':
+       PFW('-------------------------------------------------------------------')
+       PFW('Wheel lip to Ground TEST Front   = '+str(value_0['WHEEL_LIP_TO_GROUND_TEST_FRONT_LHS']))
+       PFW('Wheel lip to Ground TEST Rear    = '+str(value_0['WHEEL_LIP_TO_GROUND_TEST_REAR_LHS']))
+    if value_0['Positioning_option']=='DIRECT':
+       PFW('Wheel lip Z target position Front= '+str(value_0['WHEEL_LIP_DIRECT_FRONT_LHS']))
+       PFW('Wheel lip Z target position Rear = '+str(value_0['WHEEL_LIP_DIRECT_REAR_LHS']))
+    PFW('-------------------------------------------------------------------')
+    PFW('roll                             = '+str(value_0['ROLL_ANGLE']))
+    PFW('pitch                            = '+str(value_0['PITCH_ANGLE']))
+    PFW('yaw                              = '+str(value_0['YAW_ANGLE']))
+    PFW('-------------------------------------------------------------------')
+    PFW('')
+    return
+
+# ----------------------------------------------------------------------------
+#  function    : Input_Report_wheels()
+#  purpose     : print input values of wheel position to log file and window
+#  called from : wheel_positioning_tool
+#  arguments   :
+# ----------------------------------------------------------------------------
+def Input_Report_wheels():
+    PFW('')
+    PFW('')
+    PFW('')
+    PFW('###################################################################')
+    PFW('USER Input Values')
+    PFW('###################################################################')
+    PFW('')
+    PFW('-------------------------------------------------------------------')
+    PFW('Front wheel center X           = ' +str(value_0['WHEEL_CENTER_X_DESIGN_FRONT_LHS']))
+    PFW('Front wheel center Y           = ' +str(value_0['WHEEL_CENTER_Y_DESIGN_FRONT_LHS']))
+    PFW('Front wheel center Z           = ' +str(value_0['WHEEL_CENTER_Z_DESIGN_FRONT_LHS']))
+    PFW('-------------------------------------------------------------------')
+    PFW('Rear wheel center X            = '+str(value_0['WHEEL_CENTER_X_DESIGN_REAR_LHS']))
+    PFW('Rear wheel center Y            = '+str(value_0['WHEEL_CENTER_Y_DESIGN_REAR_LHS']))
+    PFW('Rear wheel center Z            = '+str(value_0['WHEEL_CENTER_Z_DESIGN_REAR_LHS']))
+    PFW('-------------------------------------------------------------------')
+    PFW('Tire minimum SLR VDA Front     = '+str(value_0['TIRE_MINIMUM_SLR_VDA_FRONT_LHS']))
+    PFW('Tire minimum SLR VDA Rear      = '+str(value_0['TIRE_MINIMUM_SLR_VDA_REAR_LHS']))
+    PFW('-------------------------------------------------------------------')
+    PFW('Front camber design            = ' +str(value_0['CAMBER_DESIGN_FRONT']))
+    PFW('Rear camber design             = ' +str(value_0['CAMBER_DESIGN_REAR']))
+    PFW('-------------------------------------------------------------------')
+    PFW('')
+
+# ----------------------------------------------------------------------------
+#  function    : Points_report()
+#  purpose     : print created points to log file and window
+#  called from : wheel_positioning_tool/Vehicle positioning tool/Reverse transformation
+#  arguments   :
+# ----------------------------------------------------------------------------
+def Points_report():
+ 
+    PFW('')
+    PFW('###################################################################')
+    PFW('NAMED POINTS Report')
+    PFW('###################################################################')
+    PFW('')
+    PFW('Named Points (Initial vehicle position before RideHeight transformation)')
+    PFW('-------------------------------------------------------------------')
+    for k in sorted(Points3D):
+        if k.endswith('_1'):continue
+        point=base.GetEntityCardValues(constants.NASTRAN,Points3D[k],('X','Y','Z'))
+        tabs=' '*(30-len(k))
+        PFW(k+tabs +str(round(point['X'],2))+'      ,      '+str(round(point['Y'],2))+'      ,      '+str(round(point['Z'],2)))
+
+    PFW('')
+    PFW('')
+    PFW('Named Points (Final vehicle position after RideHeight transformation)')
+    PFW('-------------------------------------------------------------------')
+    for k in sorted(Points3D):
+        if k.endswith('_0'):continue
+        point=base.GetEntityCardValues(constants.NASTRAN,Points3D[k],('X','Y','Z'))
+        tabs=' '*(30-len(k))
+        PFW(k+tabs +str(round(point['X'],2))+'      ,      '+str(round(point['Y'],2))+'      ,      '+str(round(point['Z'],2)))
+    PFW('-------------------------------------------------------------------')
+    PFW('')
+   
+
+###############################################################################################
+#  Main Functions
+###############################################################################################
+ 
+# ----------------------------------------------------------------------------
+#  function    : wheel_positioning_tool()
+#  purpose     : position 1 wheel from 0,0,0 into 4 DESIGN locations
+#  called from : GUI
+#  arguments   :
+#            a : GUI parent window -Not required(None value assigned)
+#            b : data passed by GUI -Not required(None value assigned)
+# ----------------------------------------------------------------------------
+def wheel_positioning_tool(a=None,b=None):
+    log.clear();GUIvalue.clear();value_0.clear();value_1.clear();Points3D.clear();Error.clear();temp.clear()
+    start=time.time()
+    PFW('----------------------------------------')
+    PFW('Ford RideHeight Script version:'+py_vers)
+    PFW('----------------------------------------')
+    PFW('')
+    PFW('Date : '+time.strftime("%Y %m %d"))
+    PFW('Time : '+time.strftime("%H %M %S"))
+    PFW('')
+    PFW('Wheel positioning')
+
+    if 'Neutral_Wheel' not in Lock_view:
+        PFW('**Error** : LOCK_VIEW: NEUTRAL_WHEEL')
+        save_log()
+        guitk.UserWarning('LOCK_VIEW Error: NEUTRAL_WHEEL')
+        return
+
+    get_gui_values()
+
+    value_0['attitude_path']=GUIvalue['attitude']
+   
+    if not os.path.isfile(value_0['attitude_path']) :
+        PFW('**Error** : Invalid Attitude file path');save_log()
+        guitk.UserWarning('**Error** : Invalid Attitude file path')
+        return  
+    value_0['attitude_folder'],value_0['attitude_file']= os.path.split(value_0['attitude_path'])
+    value_0['Positioning_option']=GUIvalue['Positioning_option']
+    value_0['Target_origin']=GUIvalue['Target_origin']
+
+    check_WPOS_values()
+    if Error!=[]:
+        PFW('**Error**'+'\n'+'\n'.join(Error))
+        save_log()
+        guitk.UserWarning('Value Error:\n'+'\n'.join(Error))
+        return
+     
+    move_wheels()
+
+    if Error!=[]:
+        PFW('\n'.join(Error))
+        save_log()
+        guitk.UserWarning('\n'.join(Error))
+        return 
+    create_CBAR() 
+    create_Lockview()
+    create_part()
+
+    base.SetViewAngles(f_key="F10")
+    base.RedrawAll()
+
+    PFW('')
+    PFW('FOLDER   = '+Ansa_path)
+    PFW('ANSA     = '+Ansa_file)
+    PFW('ATTITUDE = '+value_0['attitude_file'])
+    PFW('')
+    attitude_Report()
+    Input_Report_wheels()   
+    #Coordinate_report()
+    Points_report()
+
+    save_ansa()
+
+    end = time.time()
+    PFW('overall RUNTIME : '+str(round(end-start,2))+' sec')
+    PFW('')
+    PFW('Process completed')
+
+    save_log()   
+
+# ----------------------------------------------------------------------------
+#  function    : Reverse_transformation()
+#  purpose     : move transformed geometry from new position to old position
+#  called from : GUImenu()
+#  arguments   : 
+#            a : GUI parent window -Not required(None value assigned)
+#            b : data passed by GUI -Not required(None value assigned)
+# ----------------------------------------------------------------------------
+def Reverse_transformation(a=None,b=None):
+    Points3D.clear()
+    log.clear()
+    start=time.time()
+
+    PFW('----------------------------------------')
+    PFW('Ford RideHeight Script version:'+py_vers)
+    PFW('----------------------------------------')
+    PFW('')
+    PFW('Date : '+time.strftime("%Y %m %d"))
+    PFW('Time : '+time.strftime("%H %M %S"))
+    PFW('')
+    PFW('Reverse Transformation')
+    PFW('')
+    PFW('FOLDER   = '+Ansa_path)
+    PFW('ANSA     = '+Ansa_file)
+	##
+	## error if activated 
+    ## t.b. corrected
+	##
+    #PFW('ATTITUDE = '+value_0['attitude_file'])
+    PFW('')
+
+    #collect points and check errors
+    points = base.CollectEntities(constants.NASTRAN,None, "POINT") 
+    pointsdata = {point._name:point for point in points}
+
+    wheels_required_points_0  = ['WHEEL_CENTER_FRONT_LHS_0','WHEEL_CENTER_REAR_LHS_0','WHEEL_CENTER_FRONT_RHS_0','WHEEL_CENTER_REAR_RHS_0']
+    wheels_required_points_1  = ['WHEEL_CENTER_FRONT_LHS_1','WHEEL_CENTER_REAR_LHS_1','WHEEL_CENTER_FRONT_RHS_1','WHEEL_CENTER_REAR_RHS_1']
+    body_required_points_0    = ['EYEBROW_FRONT_DESIGN_LHS_0','EYEBROW_REAR_DESIGN_LHS_0','EYEBROW_FRONT_DESIGN_RHS_0','EYEBROW_REAR_DESIGN_RHS_0']
+    body_required_points_1    = ['EYEBROW_FRONT_DESIGN_LHS_1','EYEBROW_REAR_DESIGN_LHS_1','EYEBROW_FRONT_DESIGN_RHS_1','EYEBROW_REAR_DESIGN_RHS_1']
+
+    errors=[]
+
+    for i in wheels_required_points_0+wheels_required_points_1+body_required_points_0+body_required_points_1:
+       if i not in pointsdata: errors.append(i)
+       else:Points3D[i]=pointsdata[i]
+
+    if errors!=[]:guitk.UserWarning('**WARNING** input Data missing\n'+'\n'.join(errors));return
+ 
+ #move wheels
+
+    wheels=base.CollectEntities(constants.NASTRAN,[Lock_view['WHEEL_FRONT'],Lock_view['WHEEL_REAR']], "__ALL_ENTITIES__")
+
+    (x1,y1,z1) = base.Cog(pointsdata['WHEEL_CENTER_FRONT_LHS_1'])
+    (x2,y2,z2) = base.Cog(pointsdata['WHEEL_CENTER_FRONT_RHS_1'])
+    (x3,y3,z3) = base.Cog(pointsdata['WHEEL_CENTER_REAR_LHS_1'])
+
+    (x4,y4,z4) = base.Cog(pointsdata['WHEEL_CENTER_FRONT_LHS_0'])
+    (x5,y5,z5) = base.Cog(pointsdata['WHEEL_CENTER_FRONT_RHS_0'])
+    (x6,y6,z6) = base.Cog(pointsdata['WHEEL_CENTER_REAR_LHS_0'])
+
+#    add all cbar to wheels to move
+    cbar=base.CollectEntities(constants.NASTRAN,None, "CBAR")
+
+    base.GeoTransform("MOVE",0,"SAME PART",  "NONE",x1,y1,z1,x2-x1,y2-y1,z2-z1,x3-x1,y3-y1,z3-z1,x4,y4,z4,x5-x4,y5-y4,z5-z4,x6-x4,y6-y4,z6-z4, wheels+cbar)
+
+ #move body
+
+    body=base.CollectEntities(constants.NASTRAN,[Lock_view['BODY'],Lock_view['SUSPENSION_FRONT'],Lock_view['SUSPENSION_REAR']], "__ALL_ENTITIES__")
+
+    (x1,y1,z1) = base.Cog(pointsdata['EYEBROW_FRONT_DESIGN_LHS_1'])
+    (x2,y2,z2) = base.Cog(pointsdata['EYEBROW_FRONT_DESIGN_RHS_1'])
+    (x3,y3,z3) = base.Cog(pointsdata['EYEBROW_REAR_DESIGN_LHS_1'])
+
+    (x4,y4,z4) = base.Cog(pointsdata['EYEBROW_FRONT_DESIGN_LHS_0'])
+    (x5,y5,z5) = base.Cog(pointsdata['EYEBROW_FRONT_DESIGN_RHS_0'])
+    (x6,y6,z6) = base.Cog(pointsdata['EYEBROW_REAR_DESIGN_LHS_0'])
+
+    base.GeoTransform("MOVE",0,"SAME PART",  "NONE",x1,y1,z1,x2-x1,y2-y1,z2-z1,x3-x1,y3-y1,z3-z1,x4,y4,z4,x5-x4,y5-y4,z5-z4,x6-x4,y6-y4,z6-z4, body)
+  
+    base.SetViewAngles(f_key="F3")
+    base.RedrawAll()
+
+    Points_report()
+    save_ansa()
+
+    end = time.time()
+    PFW('overall RUNTIME : '+str(round(end-start,2))+' sec')
+    PFW('')
+    PFW('Process completed')
+
+    save_log()
+
+# ----------------------------------------------------------------------------
+#  function    :vehicle_positioning_tool()
+#  purpose     :Move Vehicle to the selected option AREO/TEST/DIRECT and EU/US position
+#  called from :GUI Menu / positionTool()
+#  arguments   : 
+#             nogui  optional : only for nogui mode to mention the type
+#             attitudefile optional : only for nogui mode to mention the attitude file
+#                option optional : only for nogui mode to mention then position option
+# ----------------------------------------------------------------------------      
+def vehicle_positioning_tool(nogui=False,attitudefile=None,option=None,Arg=None):
+    start=time.time()
+    value_0.clear();Error.clear();log.clear();GUIvalue.clear();value_1.clear();Points3D.clear();temp.clear()
+    PFW('----------------------------------------')
+    PFW('Ford RideHeight Script version:'+py_vers)
+    PFW('----------------------------------------')
+    PFW('')
+    PFW('Date : '+time.strftime("%Y %m %d"))
+    PFW('Time : '+time.strftime("%H %M %S"))
+    PFW('')
+    
+    if nogui==True: 
+        if attitudefile==None:value_0['attitude_path']=checkForAttitudeFile()
+        else:value_0['attitude_path']=attitudefile
+ 
+        if not os.path.isfile(value_0['attitude_path']) :PFW('**Error** : Invalid Attitude file path');save_log();return
+ 
+        getattitude_values(value_0['attitude_path'])
+     
+       #set default values
+        if 'roll' not in attitude_data:attitude_data['roll']=0;PFW('**Warning** : roll angle not in attitude file; Assigned default value 0')
+        if 'pitch' not in attitude_data: attitude_data['pitch']=0;PFW('**Warning** : pitch angle not in attitude file; Assigned default value 0')
+        if 'yaw' not in attitude_data: attitude_data['yaw']=0;PFW('**Warning** : yaw angle not in attitude file; Assigned default value 0')
+ 
+        for k in Attitude_fields:
+            if Attitude_fields[k] in attitude_data: GUIvalue[k]=attitude_data[Attitude_fields[k]]
+            else:Error.append('**Error** : '+Attitude_fields[k]+' missing in attitude file')
+     
+        if Error!=[]:PFW('\n'.join(Error));save_log();return
+     
+        if option==None and Attitude_fields['Positioning_option'] in attitude_data:option=attitude_data[Attitude_fields['Positioning_option']]
+        GUIvalue['Positioning_option']=option
+     
+    else:
+       get_gui_values()
+       value_0['attitude_path']=GUIvalue['attitude']
+   
+    if not os.path.isfile(value_0['attitude_path']) :
+        PFW('**Error** : Invalid Attitude file path');save_log()
+        if nogui!=True:guitk.UserWarning('**Error** : Invalid Attitude file path')
+        return
+
+    value_0['attitude_folder'],value_0['attitude_file']= os.path.split(value_0['attitude_path']) 
+    value_0['Positioning_option']=GUIvalue['Positioning_option']
+    value_0['Target_origin']=GUIvalue['Target_origin']
+
+    #check required input values
+    if value_0['Positioning_option']=='AERO':Exec_AERO()
+    elif value_0['Positioning_option']=='TEST':Exec_TEST()
+    elif value_0['Positioning_option']=='DIRECT':Exec_DIRECT()
+
+    if Error!=[]:
+        PFW('\n'.join(Error));save_log()
+        if nogui!=True:guitk.UserWarning('\n'.join(Error))
+        return
+
+    check_WPOS_values_difference()
+   
+    for key in ['BODY','SUSPENSION_FRONT','SUSPENSION_REAR','WHEEL_FRONT','WHEEL_REAR']:
+       if key not in Lock_view:Error.append('**Error** : LOCK_VIEW missing: '+key)
+   
+    if Error!=[]:
+        PFW('\n'.join(Error));save_log()
+        if nogui!=True:guitk.UserWarning('\n'.join(Error))
+        return
+     
+    if debug>0:PFW('Input verification completed')
+#checking ok- continue executing
+
+    PFW('')
+    PFW('FOLDER   = '+Ansa_path)
+    PFW('ANSA     = '+Ansa_file)
+    PFW('ATTITUDE = '+value_0['attitude_file'])
+    PFW('')
+
+    #PFW('Positioning option selected: ' +value_0['Positioning_option'])
+    #PFW('Target Origin selected: '+value_0['Target_origin'])
+ 
+    create_points()
+    create_measurement()
+    create_quad()
+    RH_MOVE() 
+    #if attitude_data[Attitude_fields['Target_origin']].startswith('US'):x=value_1['WHEEL_CENTER_X_DESIGN_REAR_LHS']/2
+    #else:x=0
+    x=0
+    if value_0['ROLL_ANGLE']!=0:apply_roll()
+    if value_0['PITCH_ANGLE']!=0:apply_pitch(x)
+    if value_0['YAW_ANGLE']!=0:apply_yaw(x)
+    create_road_floor()
+    base.SetViewAngles(f_key="F3")
+    base.RedrawAll()
+
+    PFW('')
+    PFW('')
+    PFW('###################################################################')
+    PFW('nogui options')
+    PFW('###################################################################')
+    PFW('')
+    if nogui==True:PFW('\n'.join(Arg))
+    PFW('')
+
+    attitude_Report()
+    Input_Report()   
+    Coordinate_report()
+    Points_report()
+
+    #clear temp data if any
+    if temp!=[]:base.DeleteEntity(temp, True)
+
+    save_ansa()
+
+    end = time.time()
+    PFW('overall RUNTIME : '+str(round(end-start,2))+' sec')
+    PFW('')
+    PFW('Process completed')
+    save_log()
+
+# ----------------------------------------------------------------------------
+#  function    :GUImenu()
+#  purpose     :open user interface to select options
+#  called from :positionTool()
+#  arguments   : 
+# ----------------------------------------------------------------------------  
+def GUImenu():
+
+    window = guitk.BCWindowCreate("Vehicle Positioning Tool", guitk.constants.BCOnExitDestroy)
+    guitk.BCWindowSetAcceptFunction(window,lambda x,y:None, None)
+    frame = guitk.BCFrameCreate(window)
+    guitk.BCLabelCreate(window, "note1: to Ground=physical floor. note2: All distances are in mm!")
+    TAB = guitk.BCTabWidgetCreate(window)
+    #statusBar = guitk.BCStatusBarCreate(window)
+
+    LO1 = guitk.BCGridLayoutCreate(frame, 1, 1)
+    guitk.BCSetBackgroundColor(window, 100, 160, 200)
+
+    guitk.BCGridLayoutAddWidget(LO1,guitk.BCLabelCreate(LO1,'Select Input File'), 0, 0, guitk.constants.BCAlignLeft)
+    guitk.BCGridLayoutAddWidget(LO1,guitk.BCLabelCreate(LO1,"Select Positioning Option"), 1, 0, guitk.constants.BCAlignLeft)
+    guitk.BCGridLayoutAddWidget(LO1,guitk.BCLabelCreate(LO1,"Target Origin"), 2, 0, guitk.constants.BCAlignLeft)
+
+    CHB1 = guitk.BCCheckBoxCreate(LO1, "Show 900mm points")
+    guitk.BCSetEnabled(CHB1, False)
+    guitk.BCGridLayoutAddWidget(LO1,CHB1, 3, 0, guitk.constants.BCAlignAuto)
+
+    Glob['attitude'] = guitk.BCLineEditPathCreate(LO1, guitk.constants.BCHistoryFiles, '', guitk.constants.BCHistorySelect, 'LineEditPath');guitk.BCGridLayoutAddWidget(LO1,Glob['attitude'], 0, 1, guitk.constants.BCAlignAuto)
+    guitk.BCLineEditPathSetFilter(Glob['attitude'],"Attitude files (ATT*.txt )")
+
+    guitk.BCLineEditPathSetTextChangeFunction(Glob['attitude'], Set_GUI_values_from_Attitude) 
+    #guitk.BCLineEditPathSetEnterPressedFunction(Glob['attitude'],Set_GUI_values_from_Attitude)
+    #guitk.BCLineEditPathSetDialogEnterEnabled(Glob['attitude'], True)
+
+    Glob['Positioning_option'] = guitk.BCComboBoxCreate(LO1, positioning_options);guitk.BCGridLayoutAddWidget(LO1,Glob['Positioning_option'], 1, 1, guitk.constants.BCAlignAuto)                                     
+    Glob['Target_origin'] = guitk.BCComboBoxCreate(LO1,Target_origin_options );guitk.BCGridLayoutAddWidget(LO1,Glob['Target_origin'], 2, 1, guitk.constants.BCAlignAuto)
+    help = guitk.BCPushButtonCreate(LO1, 'HELP',help_func, None);guitk.BCGridLayoutAddWidget(LO1,help, 3, 1, guitk.constants.BCAlignAuto)
+    guitk.BCAddToolTipImage(help, help_img)
+
+    TAB1 = guitk.BCVBoxCreate(TAB);guitk.BCTabWidgetAddTab(TAB,TAB1, "Vehicle Position Tool")
+    TAB2 = guitk.BCVBoxCreate(TAB);guitk.BCTabWidgetAddTab(TAB,TAB2, "Wheel Position Tool")
+    TAB3 = guitk.BCVBoxCreate(TAB);guitk.BCTabWidgetAddTab(TAB,TAB3, "Reverse Transformation")
+
+    LO2 = guitk.BCGridLayoutCreate(TAB1, 1, 1)
+
+    ##TAB1##
+    guitk.BCGridLayoutAddWidget(LO2,guitk.BCLabelCreate(LO2,"Front Axle"), 0, 1, guitk.constants.BCAlignLeft) 
+    guitk.BCGridLayoutAddWidget(LO2,guitk.BCLabelCreate(LO2,"Rear Axle"), 0, 3, guitk.constants.BCAlignLeft) 
+
+    # cw 6.7e changed names and cleaned special nonsens characters
+    guitk.BCGridLayoutAddWidget(LO2,guitk.BCLabelCreate(LO2,"Wheel Center Design X"), 1, 0, guitk.constants.BCAlignLeft)
+    guitk.BCGridLayoutAddWidget(LO2,guitk.BCLabelCreate(LO2,"Wheel Center Design Y"), 2, 0, guitk.constants.BCAlignLeft)
+    guitk.BCGridLayoutAddWidget(LO2,guitk.BCLabelCreate(LO2,"Wheel Center Design Z"), 3, 0, guitk.constants.BCAlignLeft)
+    guitk.BCGridLayoutAddWidget(LO2,guitk.BCLabelCreate(LO2,"Wheel Center VDA Z"), 4, 0, guitk.constants.BCAlignLeft)
+    guitk.BCGridLayoutAddWidget(LO2,guitk.BCLabelCreate(LO2,"Tire minimum SLR Design"),5, 0, guitk.constants.BCAlignLeft)
+    guitk.BCGridLayoutAddWidget(LO2,guitk.BCLabelCreate(LO2,"Tire minimum SLR VDA"), 6, 0, guitk.constants.BCAlignLeft)
+    guitk.BCGridLayoutAddWidget(LO2,guitk.BCLabelCreate(LO2,"Wheel lip to Ground Design Z"),7, 0, guitk.constants.BCAlignLeft)
+    guitk.BCGridLayoutAddWidget(LO2,guitk.BCLabelCreate(LO2,"Wheel lip to Ground VDA Z"),8, 0, guitk.constants.BCAlignLeft)
+    guitk.BCGridLayoutAddWidget(LO2,guitk.BCLabelCreate(LO2,"Wheel lip to Ground TEST Z"),9, 0, guitk.constants.BCAlignLeft)
+    guitk.BCGridLayoutAddWidget(LO2,guitk.BCLabelCreate(LO2,"PT10 Design X"),10, 0, guitk.constants.BCAlignLeft)
+    guitk.BCGridLayoutAddWidget(LO2,guitk.BCLabelCreate(LO2,""), 11, 0, guitk.constants.BCAlignLeft)
+
+    guitk.BCGridLayoutAddWidget(LO2,guitk.BCLabelCreate(LO2,"Wheel lip Z (target position)"), 12, 0, guitk.constants.BCAlignLeft)
+    guitk.BCGridLayoutAddWidget(LO2,guitk.BCLabelCreate(LO2,"Pick WheelCenter Points"), 13, 0, guitk.constants.BCAlignLeft)
+    guitk.BCGridLayoutAddWidget(LO2,guitk.BCLabelCreate(LO2,"Pick EyeBrow Points"), 14, 0, guitk.constants.BCAlignLeft)
+
+    guitk.BCGridLayoutAddWidget(LO2,guitk.BCLabelCreate(LO2,""), 15, 0, guitk.constants.BCAlignLeft)
+
+
+    guitk.BCGridLayoutAddWidget(LO2,guitk.BCLabelCreate(LO2,'roll angle'), 16, 0, guitk.constants.BCAlignLeft)
+    guitk.BCGridLayoutAddWidget(LO2,guitk.BCLabelCreate(LO2,'pitch angle'), 17, 0, guitk.constants.BCAlignLeft)
+    guitk.BCGridLayoutAddWidget(LO2,guitk.BCLabelCreate(LO2,'yaw angle'), 18, 0, guitk.constants.BCAlignLeft)
+
+    LE['WHEEL_CENTER_X_DESIGN_FRONT_LHS']      = guitk.BCLineEditCreate(LO2,'');guitk.BCGridLayoutAddWidget(LO2,LE['WHEEL_CENTER_X_DESIGN_FRONT_LHS'],1, 1, guitk.constants.BCAlignAuto)
+    LE['WHEEL_CENTER_Y_DESIGN_FRONT_LHS']      = guitk.BCLineEditCreate(LO2,'');guitk.BCGridLayoutAddWidget(LO2,LE['WHEEL_CENTER_Y_DESIGN_FRONT_LHS'],2, 1, guitk.constants.BCAlignAuto)
+    LE['WHEEL_CENTER_Z_DESIGN_FRONT_LHS']      = guitk.BCLineEditCreate(LO2,'');guitk.BCGridLayoutAddWidget(LO2,LE['WHEEL_CENTER_Z_DESIGN_FRONT_LHS'],3, 1, guitk.constants.BCAlignAuto)
+    LE['WHEEL_CENTER_Z_VDA_FRONT_LHS']         = guitk.BCLineEditCreate(LO2,'');guitk.BCGridLayoutAddWidget(LO2,LE['WHEEL_CENTER_Z_VDA_FRONT_LHS'],4, 1, guitk.constants.BCAlignAuto)
+    LE['TIRE_MINIMUM_SLR_DESIGN_FRONT_LHS']            = guitk.BCLineEditCreate(LO2,'');guitk.BCGridLayoutAddWidget(LO2,LE['TIRE_MINIMUM_SLR_DESIGN_FRONT_LHS'],5, 1, guitk.constants.BCAlignAuto)
+    LE['TIRE_MINIMUM_SLR_VDA_FRONT_LHS']            = guitk.BCLineEditCreate(LO2,'');guitk.BCGridLayoutAddWidget(LO2,LE['TIRE_MINIMUM_SLR_VDA_FRONT_LHS']  ,6, 1, guitk.constants.BCAlignAuto)
+    LE['WHEEL_LIP_TO_GROUND_DESIGN_FRONT_LHS']  = guitk.BCLineEditCreate(LO2,'');guitk.BCGridLayoutAddWidget(LO2,LE['WHEEL_LIP_TO_GROUND_DESIGN_FRONT_LHS'] ,7, 1, guitk.constants.BCAlignAuto)
+    LE['WHEEL_LIP_TO_GROUND_VDA_FRONT_LHS']     = guitk.BCLineEditCreate(LO2,'');guitk.BCGridLayoutAddWidget(LO2,LE['WHEEL_LIP_TO_GROUND_VDA_FRONT_LHS'],8, 1, guitk.constants.BCAlignAuto)
+    LE['WHEEL_LIP_TO_GROUND_TEST_FRONT_LHS']   = guitk.BCLineEditCreate(LO2,'');guitk.BCGridLayoutAddWidget(LO2,LE['WHEEL_LIP_TO_GROUND_TEST_FRONT_LHS'] ,9, 1, guitk.constants.BCAlignAuto)
+    LE['PT10_DESIGN_X_FRONT_LHS']              = guitk.BCLineEditCreate(LO2,'');guitk.BCGridLayoutAddWidget(LO2,LE['PT10_DESIGN_X_FRONT_LHS'] ,10, 1, guitk.constants.BCAlignAuto)
+    LE['WHEEL_LIP_DIRECT_FRONT_LHS']           = guitk.BCLineEditCreate(LO2,'');guitk.BCGridLayoutAddWidget(LO2,LE['WHEEL_LIP_DIRECT_FRONT_LHS'] ,12, 1, guitk.constants.BCAlignAuto)
+
+    LE['ROLL_ANGLE']                          = guitk.BCLineEditCreate(LO2,'0');guitk.BCGridLayoutAddWidget(LO2,LE['ROLL_ANGLE'] ,16, 1, guitk.constants.BCAlignAuto)
+    LE['PITCH_ANGLE']                         = guitk.BCLineEditCreate(LO2,'0');guitk.BCGridLayoutAddWidget(LO2,LE['PITCH_ANGLE'],17, 1, guitk.constants.BCAlignAuto)
+    LE['YAW_ANGLE']                          = guitk.BCLineEditCreate(LO2,'0');guitk.BCGridLayoutAddWidget(LO2,LE['YAW_ANGLE'],18, 1, guitk.constants.BCAlignAuto)
+
+    PB['WHEEL_CENTER_POINT_DIRECT_FRONT_LHS']= guitk.BCPushButtonCreate(LO2, 'Pick WC_front',pickpoint,'found WC_front= '); guitk.BCGridLayoutAddWidget(LO2,PB['WHEEL_CENTER_POINT_DIRECT_FRONT_LHS'],13, 1, guitk.constants.BCAlignAuto)
+
+    PB['WHEEL_LIP_POINT_DIRECT_FRONT_LHS']             = guitk.BCPushButtonCreate(LO2, 'Pick EyeBrow_front',pickpoint, 'found EB_front= '); guitk.BCGridLayoutAddWidget(LO2,PB['WHEEL_LIP_POINT_DIRECT_FRONT_LHS'] ,14, 1, guitk.constants.BCAlignAuto)
+
+    LE['WHEEL_CENTER_X_DESIGN_REAR_LHS']        = guitk.BCLineEditCreate(LO2,'');guitk.BCGridLayoutAddWidget(LO2,LE['WHEEL_CENTER_X_DESIGN_REAR_LHS'],1, 3, guitk.constants.BCAlignAuto)
+    LE['WHEEL_CENTER_Y_DESIGN_REAR_LHS']       = guitk.BCLineEditCreate(LO2,'');guitk.BCGridLayoutAddWidget(LO2,LE['WHEEL_CENTER_Y_DESIGN_REAR_LHS'],2, 3, guitk.constants.BCAlignAuto)
+    LE['WHEEL_CENTER_Z_DESIGN_REAR_LHS']         = guitk.BCLineEditCreate(LO2,'');guitk.BCGridLayoutAddWidget(LO2,LE['WHEEL_CENTER_Z_DESIGN_REAR_LHS'] ,3, 3, guitk.constants.BCAlignAuto)
+    LE['WHEEL_CENTER_Z_VDA_REAR_LHS']             = guitk.BCLineEditCreate(LO2,'');guitk.BCGridLayoutAddWidget(LO2,LE['WHEEL_CENTER_Z_VDA_REAR_LHS'] ,4, 3, guitk.constants.BCAlignAuto)
+    LE['TIRE_MINIMUM_SLR_DESIGN_REAR_LHS']             = guitk.BCLineEditCreate(LO2,'');guitk.BCGridLayoutAddWidget(LO2,LE['TIRE_MINIMUM_SLR_DESIGN_REAR_LHS'],5, 3, guitk.constants.BCAlignAuto)
+    LE['TIRE_MINIMUM_SLR_VDA_REAR_LHS']                = guitk.BCLineEditCreate(LO2,'');guitk.BCGridLayoutAddWidget(LO2,LE['TIRE_MINIMUM_SLR_VDA_REAR_LHS'] ,6, 3, guitk.constants.BCAlignAuto)
+    LE['WHEEL_LIP_TO_GROUND_DESIGN_REAR_LHS']  = guitk.BCLineEditCreate(LO2,'');guitk.BCGridLayoutAddWidget(LO2,LE['WHEEL_LIP_TO_GROUND_DESIGN_REAR_LHS'],7, 3, guitk.constants.BCAlignAuto)
+    LE['WHEEL_LIP_TO_GROUND_VDA_REAR_LHS']     = guitk.BCLineEditCreate(LO2,'');guitk.BCGridLayoutAddWidget(LO2,LE['WHEEL_LIP_TO_GROUND_VDA_REAR_LHS'],8, 3, guitk.constants.BCAlignAuto)
+    LE['WHEEL_LIP_TO_GROUND_TEST_REAR_LHS']    = guitk.BCLineEditCreate(LO2,'');guitk.BCGridLayoutAddWidget(LO2,LE['WHEEL_LIP_TO_GROUND_TEST_REAR_LHS'] ,9, 3, guitk.constants.BCAlignAuto)
+    LE['PT10_DESIGN_X_REAR_LHS']              = guitk.BCLineEditCreate(LO2,'');guitk.BCGridLayoutAddWidget(LO2,LE['PT10_DESIGN_X_REAR_LHS'] ,10, 3, guitk.constants.BCAlignAuto)
+    LE['WHEEL_LIP_DIRECT_REAR_LHS']             = guitk.BCLineEditCreate(LO2,'');guitk.BCGridLayoutAddWidget(LO2,LE['WHEEL_LIP_DIRECT_REAR_LHS'],12, 3, guitk.constants.BCAlignAuto)
+
+    PB['WHEEL_CENTER_POINT_DIRECT_REAR_LHS']         = guitk.BCPushButtonCreate(LO2, 'Pick WC_rear',pickpoint,'found WC_rear= '); guitk.BCGridLayoutAddWidget(LO2,PB['WHEEL_CENTER_POINT_DIRECT_REAR_LHS'] ,13, 3, guitk.constants.BCAlignAuto)
+    PB['WHEEL_LIP_POINT_DIRECT_REAR_LHS']            = guitk.BCPushButtonCreate(LO2, 'Pick EyeBrow_rear',pickpoint, 'found EB_rear= '); guitk.BCGridLayoutAddWidget(LO2,PB['WHEEL_LIP_POINT_DIRECT_REAR_LHS'],14, 3, guitk.constants.BCAlignAuto)
+
+    LO1= guitk.BCGridLayoutCreate(TAB1, 1, 1)
+
+    guitk.BCGridLayoutAddWidget(LO1,guitk.BCLabelCreate(LO1,""), 3, 0, guitk.constants.BCAlignLeft)
+
+    HB = guitk.BCHBoxCreate(TAB1)
+    guitk.BCPushButtonCreate(HB, 'Execute Vehicle RH positioning',vehicle_positioning_tool, None)
+    guitk.BCSetEnabled(guitk.BCPushButtonCreate(HB, 'UNDO',None, None), False)
+
+    #TAB2
+
+    LO3 = guitk.BCGridLayoutCreate(TAB2, 1, 1)
+
+    guitk.BCGridLayoutAddWidget(LO3,guitk.BCLabelCreate(LO3,"Camber DESIGN front"),1, 0, guitk.constants.BCAlignLeft)
+    LE['CAMBER_DESIGN_FRONT'] = guitk.BCLineEditCreate(LO3, "");guitk.BCGridLayoutAddWidget(LO3,LE['CAMBER_DESIGN_FRONT'],1, 1, guitk.constants.BCAlignAuto)
+
+    guitk.BCGridLayoutAddWidget(LO3,guitk.BCLabelCreate(LO3,"Camber DESIGN rear"),2, 0, guitk.constants.BCAlignLeft)
+    LE['CAMBER_DESIGN_REAR'] = guitk.BCLineEditCreate(LO3, "");guitk.BCGridLayoutAddWidget(LO3,LE['CAMBER_DESIGN_REAR'],2, 1, guitk.constants.BCAlignAuto)
+
+    guitk.BCGridLayoutAddWidget(LO3,guitk.BCLabelCreate(LO3,"Wheel_0_position"), 3, 0, guitk.constants.BCAlignLeft)
+    Glob['Neutral_wheel_id_type'] = guitk.BCComboBoxCreate(LO3, [  'Locked View ID', 'Wheel Group or Part module ID','Pick entities from screen']);guitk.BCGridLayoutAddWidget(LO3,Glob['Neutral_wheel_id_type'],3, 1, guitk.constants.BCAlignAuto)
+    LE['NEUTRAL_WHEEL_ID']     = guitk.BCLineEditCreate(LO3, "");guitk.BCGridLayoutAddWidget(LO3,LE['NEUTRAL_WHEEL_ID'] ,3, 2, guitk.constants.BCAlignAuto)
+
+    guitk.BCGridLayoutAddWidget(LO3,guitk.BCToolButtonCreate(LO3,'pick_small.svg','',pick_lv,None), 3, 3, guitk.constants.BCAlignAuto)
+
+    guitk.BCSpacerCreate(TAB2)
+    guitk.BCPushButtonCreate(TAB2, 'Excute Wheel Positioning',wheel_positioning_tool, None)
+
+    #Tab3
+    guitk.BCSpacerCreate(TAB3)
+    guitk.BCPushButtonCreate(TAB3, 'Execute Reverse Transform',Reverse_transformation, None)
+
+    Set_GUI_values_from_DB()
+    Set_GUI_values_from_Attitude()
+    guitk.BCComboBoxSetCurrentIndexChangedFunction(Glob['Positioning_option'],Grayout)
+    Grayout()
+
+    guitk.BCTabWidgetSetCurrentTab(TAB, TAB1)
+
+    guitk.BCShow(window)
+
+# ----------------------------------------------------------------------------
+#  function    : positionTool()
+#  purpose     : This function used to detect Script Running in GUI mode or Nogui mode
+#  called from : on load
+#  arguments   :              
+# ---------------------------------------------------------------------------- 
+def positionTool():
+    noguiMode=False
+    attitudefile=None
+    option=None
+    m = session.ProgramArguments()
+    for i in m:
+        if i == '-nogui':noguiMode = True
+        elif '-input:' in i:attitudefile = i[7:]
+        elif '-option:' in i:option=i[8:]
+
+    if noguiMode==False:GUImenu()
+    else:vehicle_positioning_tool(nogui=True,attitudefile=attitudefile,option=option,Arg=m)
+
+positionTool()
