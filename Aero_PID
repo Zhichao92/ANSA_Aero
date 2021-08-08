@@ -1,0 +1,132 @@
+from ansa import base, constants, utils, guitk
+import os
+import Excel_Parser as ep
+import pandas as pd
+import numpy as np
+import logging
+import aero_constants as ae_const
+
+log = logging.getLogger()
+
+def pidcreation(b, list_bc):
+	guitk.BCListViewForEachItem(list_bc, guitk.constants.BCIterateSelected, createnewpid, 0)
+
+def store_excel_to_user_dbs(xlfile):
+
+	base.SetGeneralComment('')
+	log.info("Adding excel to ansa user database.")
+	excel_dbs = base.DBStorage()
+	for key in excel_dbs.contents().keys():
+		if key.startswith("CPSC_II"):
+			excel_dbs.remove(key, 1)
+	excel_dbs.set(os.path.split(xlfile)[1], open(xlfile, 'rb').read())
+
+def createnewpid(item, data):
+	pid_attri = {}
+	for value in ae_const.COL_HEADERS:
+		if value == 'PID Name':
+			key = 'Name'
+			pid_attri[key] = guitk.BCListViewItemGetText(item, ae_const.COL_HEADERS.index(value))
+		elif value not in ae_const.PF_PID_ATTRIBUTES:
+			pid_attri['User/Aero/'+value] = guitk.BCListViewItemGetText(item, ae_const.COL_HEADERS.index(value))
+		else:
+			pid_attri['User/Aero/Powerflow/'+value] = guitk.BCListViewItemGetText(item, ae_const.COL_HEADERS.index(value))
+	newpid_ent = base.CreateEntity(constants.OPENFOAM, "SHELL_PROPERTY", pid_attri, debug=constants.REPORT_ALL)
+	log.info("New empty Pid Created with Id:{}, Name:{}".format(newpid_ent[0]._id, newpid_ent[0]._name))	
+	cpsc_group_complete =  data[data['PID Name in ANSA - combination of CPSC and group name'] ==  newpid_ent[0]._name]['CPSC group complete']	
+	if cpsc_group_complete.values[0] != '':
+		entity_list = base.NameToEnts(newpid_ent[0]._name[:6])
+		for ent in entity_list:
+			if base.GetEntityType(constants.OPENFOAM, ent) == 'ANSAGROUP':
+				pids = base.CollectEntities(constants.OPENFOAM, ent, 'SHELL_PROPERTY', recursive=True)
+				if pids != None:
+					for old_pid in pids:
+						auto_pid = base.ReplaceProperty(old_pid, newpid_ent[0])
+						if auto_pid == 0:
+							log.info("Automatic PID assignment done for PID with Id:{}, Name:{}".format(newpid_ent[0]._id, newpid_ent[0]._name))
+							
+def mouseClick(list_bc, mb, item, col, data):
+	if not item:
+		return 0
+	if mb == guitk.constants.BCRightButton:
+		log.debug("RightClicked to create a new pid")
+		guitk.BCListViewForEachItem(list_bc, guitk.constants.BCIterateSelected, createnewpid, data)
+	return 0
+
+def updateList(list_bc, piddf):
+
+	log.debug("Update aero_pid list")
+	guitk.BCListViewClear(list_bc)
+	ws = guitk.BCGetUserDataKey(list_bc, 'ws')
+	#piddf = piddf.replace(np.nan, '', regex=True)
+	AeroGroup = piddf['Group Id'].astype(str).str[:-2]+piddf['CPSC group splitted']+piddf['CPSC group complete']
+	piddf = pd.concat(axis=1, objs=[piddf, AeroGroup]).rename(columns = {0: "Aero Group"})
+	rename = (3,)*len(ae_const.COL_HEADERS) #3 denotes string BCEnumrenametype for string
+	for index, row in piddf.iterrows():
+		if row['Aero Group'] != '':
+			titles = [row['PID Name in ANSA - combination of CPSC and group name'], row['Aero Group'], row['OF refinment flag'], \
+		row['locked views definition'], row['Mesh Aero'], row['OFFSET RESOLUTION'], row['BOUNDARY CONDITION'], \
+		row['render'], row['CCM+ flag (chassis & aero)']]
+			item = guitk.BCListViewAddItem(list_bc, ae_const.COL_NUMS, titles, rename)
+
+def increase_Aero_Pid_counter():
+
+	dbs = base.DBStorage()
+	counter = dbs.get('Aero_Pid_Counter', 0)
+	counter += 1
+	dbs.set('Aero_Pid_Counter', counter)
+
+def excel_pidlist(excelfile):
+
+	log.info("Opening Excel Pid List Window")
+	increase_Aero_Pid_counter()
+	store_excel_to_user_dbs(excelfile)
+
+	full_df = ep.excel(excelfile).filtered_df
+	piddf = full_df.replace(np.nan, '', regex=True)
+	titles = ae_const.COL_HEADERS
+
+	#base.SetCurrentDeck(constants.NASTRAN)
+	w = guitk.BCWindowCreate("Aero PID list", guitk.constants.BCOnExitDestroy)
+
+	#Create a splitter between the two widgets
+	spl = guitk.BCSplitterCreate(w, guitk.constants.BCVertical)
+
+	#Create a widgetStack to place a excel filename BCLabel
+	ws = guitk.BCWidgetStackCreate(spl)
+	#lep = guitk.BCLineEditPathCreate(w, 1, base.DataBaseName(), 0, "ANSA_Example_lineEditPath")
+	excellabel = guitk.BCLabelCreate(w, excelfile)
+	guitk.BCWidgetStackAddWidget(ws, excellabel, ae_const.EXCEL_BCLABEL)
+	guitk.BCWidgetStackRaiseWidget(ws, excellabel)
+
+	#The list will be controlled by BCWidgetExpand we
+	we = guitk.BCWidgetExpandCreate(spl);
+	list_bc = guitk.BCListViewCreate(we, ae_const.COL_NUMS, titles, 1)
+	guitk.BCWidgetExpandSetWidget(we, list_bc)
+
+	# set selection mode to multi
+	guitk.BCListViewSetSelectionMode(list_bc, guitk.constants.BCMulti)
+
+	#Set the multi condition filter.
+	guitk.BCListViewSetFilterEnabled(list_bc, True)
+	guitk.BCListViewSetColumnDataTypes(list_bc, (guitk.constants.BCString,)*ae_const.COL_NUMS)
+
+	#Set a BCItemViewInfoBox
+	info_box = guitk.BCItemViewInfoBoxCreate(w, list_bc)
+	guitk.BCSetUserDataKey(list_bc, "info_box", info_box)
+
+	#Set a double click function and a right click function
+	#guitk.BCListViewSetDoubleClickedFunction(list_bc, doubleClick, 0)
+	guitk.BCListViewSetMouseClickedFunction(list_bc, mouseClick, piddf)
+
+	guitk.BCSetUserDataKey(list_bc, "ws", ws) #We will need ws in updateList
+	updateList(list_bc, piddf)
+
+	ddb = guitk.BCDialogButtonBoxCreate(w)
+	newpidbutton = guitk.BCPushButtonCreate(ddb, "Create New PID", pidcreation, list_bc)
+	guitk.BCDialogButtonBoxAddButton(ddb, newpidbutton)
+
+
+	guitk.BCShow(w)
+
+#excel_pidlist("C:/Users/RMARIESW/Documents/GitHub/Aero_Setup/src/test_CPSC_II_for_Aero_preProcess_v20a.xlsm")
