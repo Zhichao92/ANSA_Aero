@@ -1,0 +1,108 @@
+# ----------------------------------------------------------------------
+# file           : 
+#
+# specification  : 
+#                : 
+# version        : 
+# User           : 
+# date           : 
+#
+# carline        : 
+#
+# data
+# ANSA input     : 
+#
+# Main folder    : 
+# Attitude       : 
+# Hardpoint      : 
+#
+# Configuration
+#
+# LOAD           : WLTP
+# PT             : 
+# Veh variant    : 
+# Tire spec      : 225/65 R17, wc_offset = 50mm
+# ----------------------------------------------------------------------
+
+# -------------------------------------------
+# DESIRED TARGET-POSITION {AERO} or {TEST}
+#
+# AERO = according to attitude hardpoint
+# TEST = selection according to TEST
+# -------------------------------------------
+#
+Target_position                  = TEST
+
+# -------------------------------------------
+# DESIRED TARGET COORDINATE ORIGIN {EU} or {US}
+#
+# EU = center of front axle
+# US = center of wheelbase on floor
+# -------------------------------------------
+#
+Target_coordinate_origin         = US
+
+# -------------------------------------------
+# ATTITUDE HARDPOINTS front 
+# -------------------------------------------
+#
+Wheel_Center_9_front_X_DESIGN    = 1723.5
+Wheel_Center_9_front_Y_DESIGN    = -795.59
+Wheel_Center_9_front_Z_DESIGN    = 442.8
+Wheel_Center_9_front_Z_VDA       =  453.2
+#
+Tire_minimum_SLR_front_DESIGN    =  343.7
+Tire_minimum_SLR_front_VDA       =  344.1
+#
+Wheel_Lip_to_Ground_front_DESIGN =  768.4
+Wheel_Lip_to_Ground_front_VDA    =  771.5
+#
+900_to_Ground_front_DESIGN       =  787.5 
+900_to_Ground_front_VDA          =  790.8
+#
+Camber_DESIGN_front              = -0.95
+#
+# -------------------------------------------
+# ATTITUDE HARDPOINTS rear 
+# -------------------------------------------
+#
+Wheel_Center_9_rear_X_DESIGN     = 4434
+Wheel_Center_9_rear_Y_DESIGN     = -805.59
+Wheel_Center_9_rear_Z_DESIGN     =  425.0
+Wheel_Center_9_rear_Z_VDA        =  430.8
+#
+Tire_minimum_SLR_rear_DESIGN     =  346.2
+Tire_minimum_SLR_rear_VDA        =  347.9
+#
+Wheel_Lip_to_Ground_rear_DESIGN  =  769.0
+Wheel_Lip_to_Ground_rear_VDA     =  784.9
+#
+900_to_Ground_rear_DESIGN        =  801.2
+900_to_Ground_rear_VDA           =  817.1
+#
+Camber_DESIGN_rear               = -1.21
+
+# -------------------------------------------
+# EYEBROW AS TEST POSITION
+# -------------------------------------------
+#
+Eyebrow_TEST_front_Z             = 772.0
+Eyebrow_TEST_rear_Z              = 785.0
+
+# -------------------------------------------
+# Vehicle angles
+# -------------------------------------------
+#
+roll                             = 0.0
+pitch                            = 0.0
+yaw                              = 0.0
+
+# -------------------------------------------
+# WHEELBASE
+# -------------------------------------------
+#
+# ref only, WHEELBASE defined with PT10
+PT10_front_X_DESIGN              = 1724.0
+PT10_rear_X_DESIGN               = 4434.0
+
+#### END ####
